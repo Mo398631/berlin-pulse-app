@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from engine import run_simulation
+from engine import run_simulation, run_simulation_deployable
 
 st.set_page_config(page_title="Berlin Pulse Depot Charging Optimizer", layout="wide")
 
@@ -11,6 +11,20 @@ st.caption(
     "Compare naive vs carbon-optimal overnight charging strategies for Berlin's "
     "electric bus fleet using real SMARD grid data (2025)."
 )
+
+# ---- Mode toggle at the top --------------------------------------------------
+mode = st.radio(
+    "Scheduling mode",
+    options=["Oracle (theoretical upper bound)", "Deployable (day-ahead information only)"],
+    horizontal=True,
+    help=(
+        "Oracle uses per-night perfect foresight of the grid mix — a theoretical "
+        "upper bound that cannot be achieved in practice. Deployable uses a fixed "
+        "hour-ranking learned from historical data, representing what is achievable "
+        "with only day-ahead information."
+    ),
+)
+is_oracle = mode.startswith("Oracle")
 
 WINDOW_PRESETS = {
     "22:00 – 05:00": (22, 5),
@@ -29,17 +43,28 @@ with st.sidebar:
 
 if run:
     with st.spinner("Running simulation…"):
-        res = run_simulation(
+        sim_kwargs = dict(
             n_buses=int(n_buses),
             kwh_per_bus=float(kwh_per_bus),
             charger_kw=float(charger_kw),
             window_hours=WINDOW_PRESETS[window_label],
         )
+        if is_oracle:
+            res = run_simulation(**sim_kwargs)
+        else:
+            res = run_simulation_deployable(**sim_kwargs)
 
     st.subheader("Headline results")
 
+    if is_oracle:
+        st.caption(
+            "⚠️ **Upper bound only.** Theoretical maximum assuming perfect foresight; "
+            "the deployable carbon saving is much smaller."
+        )
+
     col1, col2 = st.columns(2)
-    col1.metric("CO₂ saved", f"{res['carbon_saving_pct']:.2f} %")
+    carbon_label = "CO₂ saved (upper bound)" if is_oracle else "CO₂ saved (deployable)"
+    col1.metric(carbon_label, f"{res['carbon_saving_pct']:.2f} %")
     col2.metric("Cost saved", f"{res['cost_saving_pct']:.2f} %")
 
     col3, col4 = st.columns(2)
@@ -50,7 +75,8 @@ if run:
     col5.metric("CO₂ saved per bus / year", f"{res['per_bus']['co2_saved_kg']:.1f} kg")
     col6.metric("Cost saved per bus / year", f"€ {res['per_bus']['cost_saved_eur']:.2f}")
 
-    st.caption(f"Based on {res['n_nights']} complete nights, window {window_label}.")
+    mode_note = "oracle / perfect foresight" if is_oracle else "deployable / frozen day-ahead ranking"
+    st.caption(f"Based on {res['n_nights']} complete nights, window {window_label}, mode: {mode_note}.")
 
     # ---- Chart 1: Carbon-intensity profile across the charging window ----
     st.subheader("Grid Carbon-Intensity Profile")
@@ -87,7 +113,8 @@ if run:
     st.plotly_chart(fig1, use_container_width=True)
 
     # ---- Chart 2: Schedule comparison for one example night ----
-    st.subheader("Example Night: Naive vs Carbon-Optimal Schedule")
+    strategy_label = "Carbon-optimal oracle" if is_oracle else "Deployable (frozen ranking)"
+    st.subheader(f"Example Night: Naive vs {strategy_label} Schedule")
     ex = res["example_night"]
     ex_hours = ex["hours"]
     ex_labels = [f"{h:02d}:00" for h in ex_hours]
@@ -104,7 +131,7 @@ if run:
     ))
     fig2.add_trace(go.Bar(
         x=ex_labels, y=[v * 0.9 for v in optimal_charging],
-        name="Carbon-optimal (Strategy B)", marker_color="rgba(0,204,150,0.7)",
+        name=f"{strategy_label} (Strategy B)", marker_color="rgba(0,204,150,0.7)",
         width=0.35, offset=0.15,
     ))
     fig2.add_trace(go.Scatter(
@@ -130,6 +157,11 @@ if run:
 
     # ---- Chart 3: Cumulative CO₂ saved across the year ----
     st.subheader("Cumulative CO₂ Saved Across the Year")
+    if is_oracle:
+        st.caption(
+            "Theoretical maximum assuming perfect foresight; "
+            "the deployable carbon saving is much smaller."
+        )
     pn = pd.DataFrame(res["per_night"])
     pn["date"] = pd.to_datetime(pn["night_id"])
     pn = pn.sort_values("date")
@@ -145,7 +177,7 @@ if run:
         name="Cumulative CO₂ saved",
     ))
     fig3.update_layout(
-        title="Cumulative Fleet CO₂ Saved (Strategy B vs Strategy A)",
+        title=f"Cumulative Fleet CO₂ Saved — {'Oracle (upper bound)' if is_oracle else 'Deployable'}",
         xaxis_title="Date",
         yaxis_title="Cumulative CO₂ saved (tonnes)",
         margin=dict(t=40, b=40),

@@ -29,9 +29,11 @@ from baseline_simulation import (
     slot_energies,           # per-bus kWh slot split (reused as-is)
     strategy_A,              # naive charging (reused as-is)
     strategy_B,              # carbon-optimal charging (reused as-is)
+    _evaluate,              # order-based evaluation (reused from gate.py pattern)
     WINDOW_HOURS,            # default 22:00-05:00 clock order [22,23,0,1,2,3,4]
     DEFAULTS,
 )
+from gate import frozen_orders, night_sets, order_from_clock_priority, CLOCK
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 PARQUET = DATA_DIR / "berlin_pulse_validated_dataset.parquet"
@@ -221,6 +223,120 @@ def run_simulation(n_buses=DEFAULTS["n_buses"],
             "a_cost_eur": A_cost,
             "b_cost_eur": B_cost,
             "cost_saved_eur": A_cost - B_cost,
+        },
+        "per_night": per_night,
+        "intensity_profile": intensity_profile,
+        "example_night": example_night_detail,
+    }
+
+
+def run_simulation_deployable(n_buses=DEFAULTS["n_buses"],
+                              kwh_per_bus=DEFAULTS["kwh_per_bus"],
+                              charger_kw=DEFAULTS["charger_kw"],
+                              window_hours=(22, 5)):
+    """Run deployable (day-ahead) simulation using frozen training-window ranking.
+
+    Uses the same approach as gate.py: learn the average carbon-intensity rank
+    of each clock-hour from Jan-Sep (training window), then apply that fixed
+    order to all nights. This represents what is achievable with only day-ahead
+    information — no per-night perfect foresight.
+    """
+    window = _expand_window(window_hours)
+    df = load_dataset()
+
+    if window == list(WINDOW_HOURS):
+        work = df
+    else:
+        work = _apply_window(df, window)
+
+    slots = slot_energies(kwh_per_bus, charger_kw)
+    nights = complete_nights(work)
+    _, train, _ = night_sets(work)
+    carbon_clocks, price_clocks, _, _ = frozen_orders(work, train)
+    w = work[work["in_window"] & work["night_id"].isin(nights)]
+
+    A_co2 = D_co2 = A_cost = D_cost = 0.0
+    per_night = []
+    intensity_by_hour = {h: [] for h in window}
+    n_slots = len(slots)
+
+    for night_id, g in w.groupby("night_id"):
+        g = g.sort_index()
+        e = g["production_intensity"].to_numpy()
+        p = g["dayahead_price"].to_numpy()
+        hours = list(g.index.hour)
+        aC, aK = strategy_A(e, p, slots)
+        order = order_from_clock_priority(hours, carbon_clocks)
+        dC, dK = _evaluate(e, p, slots, order)
+        A_co2 += aC; D_co2 += dC
+        A_cost += aK; D_cost += dK
+
+        for i, h in enumerate(hours):
+            if h in intensity_by_hour:
+                intensity_by_hour[h].append(e[i])
+
+        per_night.append({
+            "night_id": night_id,
+            "a_co2_kg": aC / 1000.0,
+            "b_co2_kg": dC / 1000.0,
+            "co2_saved_kg": (aC - dC) / 1000.0,
+            "a_cost_eur": aK,
+            "b_cost_eur": dK,
+            "cost_saved_eur": aK - dK,
+            "hours": hours,
+            "intensity": e.tolist(),
+        })
+
+    median_idx = int(np.argsort([r["co2_saved_kg"] for r in per_night])[len(per_night) // 2])
+    ex = per_night[median_idx]
+    ex_e = np.array(ex["intensity"])
+    order_a = list(range(len(ex_e)))
+    order_d = order_from_clock_priority(ex["hours"], carbon_clocks)
+    example_night_detail = {
+        "night_id": ex["night_id"],
+        "hours": ex["hours"],
+        "intensity": ex["intensity"],
+        "a_slots": order_a[:n_slots],
+        "b_slots": order_d[:n_slots],
+    }
+
+    intensity_profile = {}
+    for h in window:
+        vals = np.array(intensity_by_hour[h])
+        if len(vals) > 0:
+            intensity_profile[h] = {
+                "mean": float(vals.mean()),
+                "min": float(vals.min()),
+                "max": float(vals.max()),
+                "p10": float(np.percentile(vals, 10)),
+                "p90": float(np.percentile(vals, 90)),
+            }
+        else:
+            intensity_profile[h] = {"mean": 0, "min": 0, "max": 0, "p10": 0, "p90": 0}
+
+    carbon_saving_pct = (A_co2 - D_co2) / A_co2 * 100.0 if A_co2 != 0 else 0.0
+    cost_saving_pct = (A_cost - D_cost) / A_cost * 100.0 if A_cost != 0 else 0.0
+
+    return {
+        "inputs": {
+            "n_buses": n_buses,
+            "kwh_per_bus": kwh_per_bus,
+            "charger_kw": charger_kw,
+            "window_hours": window,
+        },
+        "n_nights": len(nights),
+        "slots_kwh": slots,
+        "carbon_saving_pct": carbon_saving_pct,
+        "cost_saving_pct": cost_saving_pct,
+        "fleet_co2_saved_tonnes": (A_co2 - D_co2) * n_buses / 1e6,
+        "fleet_cost_saved_eur": (A_cost - D_cost) * n_buses,
+        "per_bus": {
+            "a_co2_kg": A_co2 / 1000.0,
+            "b_co2_kg": D_co2 / 1000.0,
+            "co2_saved_kg": (A_co2 - D_co2) / 1000.0,
+            "a_cost_eur": A_cost,
+            "b_cost_eur": D_cost,
+            "cost_saved_eur": A_cost - D_cost,
         },
         "per_night": per_night,
         "intensity_profile": intensity_profile,
