@@ -132,23 +132,62 @@ def run_simulation(n_buses=DEFAULTS["n_buses"],
     # are the imported, unmodified primitives.
     A_co2 = B_co2 = A_cost = B_cost = 0.0
     per_night = []
+    intensity_by_hour = {h: [] for h in window}
+    example_night_detail = None
+    n_slots = len(slots)
+
     for night_id, g in w.groupby("night_id"):
         g = g.sort_index()
         e = g["production_intensity"].to_numpy()
         p = g["dayahead_price"].to_numpy()
+        hours = list(g.index.hour)
         aC, aK = strategy_A(e, p, slots)
         bC, bK = strategy_B(e, p, slots)
         A_co2 += aC; B_co2 += bC
         A_cost += aK; B_cost += bK
+
+        for i, h in enumerate(hours):
+            if h in intensity_by_hour:
+                intensity_by_hour[h].append(e[i])
+
         per_night.append({
             "night_id": night_id,
-            "a_co2_kg": aC / 1000.0,            # per bus
+            "a_co2_kg": aC / 1000.0,
             "b_co2_kg": bC / 1000.0,
             "co2_saved_kg": (aC - bC) / 1000.0,
-            "a_cost_eur": aK,                   # per bus
+            "a_cost_eur": aK,
             "b_cost_eur": bK,
             "cost_saved_eur": aK - bK,
+            "hours": hours,
+            "intensity": e.tolist(),
         })
+
+    median_idx = int(np.argsort([r["co2_saved_kg"] for r in per_night])[len(per_night) // 2])
+    ex = per_night[median_idx]
+    ex_e = np.array(ex["intensity"])
+    order_a = list(range(len(ex_e)))
+    order_b = list(np.argsort(ex_e, kind="stable"))
+    example_night_detail = {
+        "night_id": ex["night_id"],
+        "hours": ex["hours"],
+        "intensity": ex["intensity"],
+        "a_slots": order_a[:n_slots],
+        "b_slots": order_b[:n_slots],
+    }
+
+    intensity_profile = {}
+    for h in window:
+        vals = np.array(intensity_by_hour[h])
+        if len(vals) > 0:
+            intensity_profile[h] = {
+                "mean": float(vals.mean()),
+                "min": float(vals.min()),
+                "max": float(vals.max()),
+                "p10": float(np.percentile(vals, 10)),
+                "p90": float(np.percentile(vals, 90)),
+            }
+        else:
+            intensity_profile[h] = {"mean": 0, "min": 0, "max": 0, "p10": 0, "p90": 0}
 
     carbon_saving_pct = (A_co2 - B_co2) / A_co2 * 100.0
     cost_saving_pct = (A_cost - B_cost) / A_cost * 100.0
@@ -184,6 +223,8 @@ def run_simulation(n_buses=DEFAULTS["n_buses"],
             "cost_saved_eur": A_cost - B_cost,
         },
         "per_night": per_night,
+        "intensity_profile": intensity_profile,
+        "example_night": example_night_detail,
     }
 
 

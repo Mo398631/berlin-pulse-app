@@ -1,4 +1,7 @@
+import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
+
 from engine import run_simulation
 
 st.set_page_config(page_title="Berlin Pulse Depot Charging Optimizer", layout="wide")
@@ -48,3 +51,104 @@ if run:
     col6.metric("Cost saved per bus / year", f"€ {res['per_bus']['cost_saved_eur']:.2f}")
 
     st.caption(f"Based on {res['n_nights']} complete nights, window {window_label}.")
+
+    # ---- Chart 1: Carbon-intensity profile across the charging window ----
+    st.subheader("Grid Carbon-Intensity Profile")
+    profile = res["intensity_profile"]
+    hours = list(profile.keys())
+    hour_labels = [f"{h:02d}:00" for h in hours]
+    means = [profile[h]["mean"] for h in hours]
+    p10s = [profile[h]["p10"] for h in hours]
+    p90s = [profile[h]["p90"] for h in hours]
+
+    fig1 = go.Figure()
+    fig1.add_trace(go.Scatter(
+        x=hour_labels, y=p90s, mode="lines", line=dict(width=0),
+        showlegend=False, hoverinfo="skip",
+    ))
+    fig1.add_trace(go.Scatter(
+        x=hour_labels, y=p10s, mode="lines", line=dict(width=0),
+        fill="tonexty", fillcolor="rgba(99,110,250,0.2)",
+        name="10th–90th percentile",
+    ))
+    fig1.add_trace(go.Scatter(
+        x=hour_labels, y=means, mode="lines+markers",
+        line=dict(color="rgb(99,110,250)", width=2.5),
+        name="Nightly mean",
+    ))
+    fig1.update_layout(
+        title="Mean Grid Carbon Intensity Across Charging Window",
+        xaxis_title="Hour (Berlin time)",
+        yaxis_title="Production intensity (g CO₂ / kWh)",
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+        margin=dict(t=40, b=40),
+        height=380,
+    )
+    st.plotly_chart(fig1, use_container_width=True)
+
+    # ---- Chart 2: Schedule comparison for one example night ----
+    st.subheader("Example Night: Naive vs Carbon-Optimal Schedule")
+    ex = res["example_night"]
+    ex_hours = ex["hours"]
+    ex_labels = [f"{h:02d}:00" for h in ex_hours]
+    n_hours = len(ex_hours)
+
+    naive_charging = [1 if i in ex["a_slots"] else 0 for i in range(n_hours)]
+    optimal_charging = [1 if i in ex["b_slots"] else 0 for i in range(n_hours)]
+
+    fig2 = go.Figure()
+    fig2.add_trace(go.Bar(
+        x=ex_labels, y=[v * 0.9 for v in naive_charging],
+        name="Naive (Strategy A)", marker_color="rgba(239,85,59,0.7)",
+        width=0.35, offset=-0.2,
+    ))
+    fig2.add_trace(go.Bar(
+        x=ex_labels, y=[v * 0.9 for v in optimal_charging],
+        name="Carbon-optimal (Strategy B)", marker_color="rgba(0,204,150,0.7)",
+        width=0.35, offset=0.15,
+    ))
+    fig2.add_trace(go.Scatter(
+        x=ex_labels, y=ex["intensity"], mode="lines+markers",
+        name="Intensity (g CO₂/kWh)", yaxis="y2",
+        line=dict(color="rgb(99,110,250)", width=2, dash="dot"),
+        marker=dict(size=6),
+    ))
+    fig2.update_layout(
+        title=f"Charging Schedule — Night of {ex['night_id']} (median saving)",
+        xaxis_title="Hour (Berlin time)",
+        yaxis=dict(title="Charging (on / off)", range=[0, 1.1],
+                   tickvals=[0, 1], ticktext=["Off", "On"]),
+        yaxis2=dict(title="Intensity (g CO₂ / kWh)", overlaying="y",
+                    side="right"),
+        barmode="group",
+        legend=dict(yanchor="top", y=1.12, xanchor="left", x=0.0,
+                    orientation="h"),
+        margin=dict(t=60, b=40),
+        height=380,
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+    # ---- Chart 3: Cumulative CO₂ saved across the year ----
+    st.subheader("Cumulative CO₂ Saved Across the Year")
+    pn = pd.DataFrame(res["per_night"])
+    pn["date"] = pd.to_datetime(pn["night_id"])
+    pn = pn.sort_values("date")
+    fleet_n = res["inputs"]["n_buses"]
+    pn["cum_co2_saved_t"] = (pn["co2_saved_kg"] * fleet_n).cumsum() / 1000.0
+
+    fig3 = go.Figure()
+    fig3.add_trace(go.Scatter(
+        x=pn["date"], y=pn["cum_co2_saved_t"],
+        mode="lines", fill="tozeroy",
+        line=dict(color="rgb(0,204,150)", width=2),
+        fillcolor="rgba(0,204,150,0.15)",
+        name="Cumulative CO₂ saved",
+    ))
+    fig3.update_layout(
+        title="Cumulative Fleet CO₂ Saved (Strategy B vs Strategy A)",
+        xaxis_title="Date",
+        yaxis_title="Cumulative CO₂ saved (tonnes)",
+        margin=dict(t=40, b=40),
+        height=380,
+    )
+    st.plotly_chart(fig3, use_container_width=True)
