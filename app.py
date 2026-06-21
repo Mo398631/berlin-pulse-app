@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from engine import run_simulation, run_simulation_deployable
+from engine import run_simulation, run_simulation_deployable, run_sensitivity
 
 st.set_page_config(page_title="Berlin Pulse Depot Charging Optimizer", layout="wide")
 
@@ -184,3 +184,76 @@ if run:
         height=380,
     )
     st.plotly_chart(fig3, use_container_width=True)
+
+    # ---- Section 4: Sensitivity tornado chart ----
+    st.subheader("Sensitivity Analysis")
+    st.caption(
+        "Each bar shows the range of % saving when one parameter is varied "
+        "across a plausible range while all others are held at their default. "
+        "The diamond marks the default value."
+    )
+
+    with st.spinner("Running sensitivity sweep…"):
+        sweeps = run_sensitivity(
+            is_oracle=is_oracle,
+            base_kwh=float(kwh_per_bus),
+            base_kw=float(charger_kw),
+            base_window=WINDOW_PRESETS[window_label],
+            base_n_buses=int(n_buses),
+        )
+
+    for metric_key, metric_title in [("carbon_pcts", "CO₂ Saving (%)"),
+                                      ("cost_pcts", "Cost Saving (%)")]:
+        bars = []
+        for s in sweeps:
+            vals = s[metric_key]
+            lo, hi = min(vals), max(vals)
+            default_idx = None
+            for i, v in enumerate(s["values"]):
+                if v == s["default"] or str(v) == str(s["default"]):
+                    default_idx = i
+                    break
+            default_val = vals[default_idx] if default_idx is not None else vals[len(vals) // 2]
+            range_str = f"{s['values'][0]}–{s['values'][-1]}"
+            bars.append(dict(label=s["label"], lo=lo, hi=hi,
+                             default_val=default_val, range_str=range_str,
+                             spread=hi - lo))
+
+        bars.sort(key=lambda b: b["spread"], reverse=True)
+
+        fig_t = go.Figure()
+        labels = [b["label"] for b in bars]
+
+        fig_t.add_trace(go.Bar(
+            y=labels, x=[b["hi"] - b["lo"] for b in bars],
+            base=[b["lo"] for b in bars],
+            orientation="h",
+            marker_color="rgba(99,110,250,0.6)",
+            hovertext=[
+                f"{b['label']}: {b['lo']:.3f}% – {b['hi']:.3f}% "
+                f"(default {b['default_val']:.3f}%, range {b['range_str']})"
+                for b in bars
+            ],
+            hoverinfo="text",
+            showlegend=False,
+        ))
+
+        fig_t.add_trace(go.Scatter(
+            y=labels, x=[b["default_val"] for b in bars],
+            mode="markers",
+            marker=dict(symbol="diamond", size=10, color="rgb(239,85,59)",
+                        line=dict(width=1, color="white")),
+            name="Default",
+            hovertext=[f"Default: {b['default_val']:.3f}%" for b in bars],
+            hoverinfo="text",
+        ))
+
+        fig_t.update_layout(
+            title=f"Tornado — {metric_title}",
+            xaxis_title=metric_title,
+            yaxis=dict(autorange="reversed"),
+            legend=dict(yanchor="bottom", y=0.01, xanchor="right", x=0.99),
+            margin=dict(t=40, b=40, l=160),
+            height=300,
+        )
+        st.plotly_chart(fig_t, use_container_width=True)

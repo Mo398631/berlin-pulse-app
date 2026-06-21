@@ -21,6 +21,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import streamlit as st
 
 # --- reused, unmodified simulation logic --------------------------------------
 from baseline_simulation import (
@@ -87,6 +88,7 @@ def _apply_window(df, window):
 
 # ---- data loading ------------------------------------------------------------
 
+@st.cache_data
 def load_dataset():
     """Load the validated hourly dataset (Europe/Berlin indexed)."""
     df = pd.read_parquet(PARQUET).set_index("timestamp_berlin")
@@ -342,6 +344,117 @@ def run_simulation_deployable(n_buses=DEFAULTS["n_buses"],
         "intensity_profile": intensity_profile,
         "example_night": example_night_detail,
     }
+
+
+def _quick_sim(work, kwh_per_bus, charger_kw, is_oracle):
+    """Fast inner loop: returns (carbon_saving_pct, cost_saving_pct).
+
+    Skips per-night detail, intensity profiles, and example-night selection
+    to keep the sensitivity sweep fast.
+    """
+    slots = slot_energies(kwh_per_bus, charger_kw)
+    nights = complete_nights(work)
+    w = work[work["in_window"] & work["night_id"].isin(nights)]
+
+    if not is_oracle:
+        _, train, _ = night_sets(work)
+        carbon_clocks, _, _, _ = frozen_orders(work, train)
+
+    A_co2 = S_co2 = A_cost = S_cost = 0.0
+    for _, g in w.groupby("night_id"):
+        g = g.sort_index()
+        e = g["production_intensity"].to_numpy()
+        p = g["dayahead_price"].to_numpy()
+        hours = list(g.index.hour)
+        night_slots = slots[:len(e)]
+        aC, aK = strategy_A(e, p, night_slots)
+        if is_oracle:
+            sC, sK = strategy_B(e, p, night_slots)
+        else:
+            order = order_from_clock_priority(hours, carbon_clocks)
+            sC, sK = _evaluate(e, p, night_slots, order)
+        A_co2 += aC; S_co2 += sC
+        A_cost += aK; S_cost += sK
+
+    carbon_pct = (A_co2 - S_co2) / A_co2 * 100.0 if A_co2 else 0.0
+    cost_pct = (A_cost - S_cost) / A_cost * 100.0 if A_cost else 0.0
+    return carbon_pct, cost_pct
+
+
+def run_sensitivity(is_oracle=True, base_kwh=240.0, base_kw=50.0,
+                    base_window=(22, 5), base_n_buses=277):
+    """Sweep one parameter at a time around defaults; return tornado data.
+
+    Each parameter is varied across a small range while the others stay at
+    their base values.  Fleet size is included for completeness (pct savings
+    are fleet-invariant, so the bar will be zero-width).
+
+    Returns a list of dicts, one per parameter, each with:
+        label, values, default, carbon_pcts, cost_pcts
+    """
+    df = load_dataset()
+    base_window_list = _expand_window(base_window)
+
+    if base_window_list == list(WINDOW_HOURS):
+        base_work = df
+    else:
+        base_work = _apply_window(df, base_window_list)
+
+    sweeps = []
+
+    # 1. Charger power (kW)
+    kw_vals = [30.0, 40.0, 50.0, 75.0, 100.0]
+    carbon_kw, cost_kw = [], []
+    for kw in kw_vals:
+        c, k = _quick_sim(base_work, base_kwh, kw, is_oracle)
+        carbon_kw.append(c); cost_kw.append(k)
+    sweeps.append(dict(label="Charger power (kW)", values=kw_vals,
+                       default=base_kw, carbon_pcts=carbon_kw, cost_pcts=cost_kw))
+
+    # 2. Energy per bus (kWh)
+    kwh_vals = [150.0, 200.0, 240.0, 300.0, 350.0]
+    carbon_kwh, cost_kwh = [], []
+    for kwh in kwh_vals:
+        c, k = _quick_sim(base_work, kwh, base_kw, is_oracle)
+        carbon_kwh.append(c); cost_kwh.append(k)
+    sweeps.append(dict(label="Energy per bus (kWh)", values=kwh_vals,
+                       default=base_kwh, carbon_pcts=carbon_kwh, cost_pcts=cost_kwh))
+
+    # 3. Charging window length (hours)
+    window_specs = [
+        ((23, 4), "5 h"),
+        ((23, 5), "6 h"),
+        ((22, 5), "7 h"),
+        ((22, 6), "8 h"),
+        ((21, 6), "9 h"),
+    ]
+    carbon_win, cost_win = [], []
+    win_labels = []
+    default_win_label = None
+    for spec, lbl in window_specs:
+        wl = _expand_window(spec)
+        if wl == list(WINDOW_HOURS):
+            w_work = df
+        else:
+            w_work = _apply_window(df, wl)
+        c, k = _quick_sim(w_work, base_kwh, base_kw, is_oracle)
+        carbon_win.append(c); cost_win.append(k)
+        win_labels.append(lbl)
+        if wl == base_window_list:
+            default_win_label = lbl
+    sweeps.append(dict(label="Window length", values=win_labels,
+                       default=default_win_label or "7 h",
+                       carbon_pcts=carbon_win, cost_pcts=cost_win))
+
+    # 4. Fleet size (pct savings invariant — included to show that)
+    bus_vals = [50, 150, 277, 400, 600]
+    c_base, k_base = _quick_sim(base_work, base_kwh, base_kw, is_oracle)
+    sweeps.append(dict(label="Fleet size (buses)", values=bus_vals,
+                       default=base_n_buses,
+                       carbon_pcts=[c_base] * len(bus_vals),
+                       cost_pcts=[k_base] * len(bus_vals)))
+
+    return sweeps
 
 
 if __name__ == "__main__":
