@@ -12,6 +12,40 @@ st.caption(
     "electric bus fleet using real SMARD grid data (2025)."
 )
 
+with st.expander("About this app"):
+    st.markdown(
+        """
+This interactive tool accompanies the research paper:
+
+> **Berlin Pulse: Carbon-Optimal Depot Charging for Electric Bus Fleets**
+> *Available on SSRN:* [link forthcoming]
+<!-- TODO: replace with actual SSRN URL once published -->
+
+**What it does.** Berlin's electric bus fleet charges overnight at the depot.
+The grid's carbon intensity varies hour by hour depending on the generation mix
+(wind, solar, coal, gas). This simulator compares two strategies:
+
+- **Strategy A (naive):** start charging as soon as the window opens and fill
+  slots chronologically.
+- **Strategy B (optimised):** rank the available hours by carbon intensity and
+  fill the cleanest ones first.
+
+You can choose between an *oracle* mode (theoretical upper bound using perfect
+foresight of each night's grid mix) and a *deployable* mode (a fixed
+hour-ranking learned from historical averages — what a real operator could
+implement today with only day-ahead information).
+
+Adjust the fleet size, battery capacity, charger power, and charging window in
+the sidebar, then press **Run** to see the headline savings, intensity profiles,
+an example night's schedule, cumulative CO2 saved over the year, and a
+sensitivity tornado chart.
+
+**Data source.** Hourly generation and day-ahead price data from
+[SMARD.de](https://www.smard.de) for the calendar year 2025 (364 complete
+nights after excluding data-edge dates).
+        """
+    )
+
 # ---- Mode toggle at the top --------------------------------------------------
 mode = st.radio(
     "Scheduling mode",
@@ -27,38 +61,74 @@ mode = st.radio(
 is_oracle = mode.startswith("Oracle")
 
 WINDOW_PRESETS = {
-    "22:00 – 05:00": (22, 5),
-    "23:00 – 05:00": (23, 5),
-    "22:00 – 06:00": (22, 6),
-    "19:00 – 06:00": (19, 6),
+    "22:00 – 05:00 (7 h)": (22, 5),
+    "23:00 – 05:00 (6 h)": (23, 5),
+    "22:00 – 06:00 (8 h)": (22, 6),
+    "19:00 – 06:00 (11 h)": (19, 6),
 }
 
 with st.sidebar:
     st.header("Simulation inputs")
     n_buses = st.number_input("Fleet size (buses)", min_value=1, value=277, step=1)
-    kwh_per_bus = st.number_input("kWh per bus per night", min_value=1.0, value=240.0, step=10.0)
-    charger_kw = st.number_input("Charger power (kW)", min_value=1.0, value=50.0, step=5.0)
+    kwh_per_bus = st.number_input(
+        "Energy per bus per night (kWh)", min_value=1.0, value=240.0, step=10.0,
+        help="Total energy each bus needs to charge overnight.",
+    )
+    charger_kw = st.number_input(
+        "Charger power (kW)", min_value=1.0, value=50.0, step=5.0,
+        help="Rated power of each charger. Determines how many hours are needed per bus.",
+    )
     window_label = st.selectbox("Charging window", list(WINDOW_PRESETS.keys()))
-    run = st.button("Run", type="primary", use_container_width=True)
+    run_btn = st.button("Run", type="primary", use_container_width=True)
 
-if run:
-    with st.spinner("Running simulation…"):
+# ---- Input validation --------------------------------------------------------
+
+window_tuple = WINDOW_PRESETS[window_label]
+start_h, end_h = window_tuple
+if start_h <= end_h:
+    window_length_h = end_h - start_h
+else:
+    window_length_h = (24 - start_h) + end_h
+
+hours_needed = kwh_per_bus / charger_kw
+validation_errors = []
+
+if charger_kw <= 0:
+    validation_errors.append("Charger power must be positive.")
+if kwh_per_bus <= 0:
+    validation_errors.append("Energy per bus must be positive.")
+if hours_needed > window_length_h:
+    validation_errors.append(
+        f"The bus needs **{hours_needed:.1f} hours** to charge "
+        f"({kwh_per_bus:.0f} kWh at {charger_kw:.0f} kW), but the selected "
+        f"window is only **{window_length_h} hours** long. "
+        f"Increase charger power, reduce energy per bus, or widen the window."
+    )
+
+if validation_errors:
+    for err in validation_errors:
+        st.error(err)
+    st.stop()
+
+if run_btn:
+    with st.spinner("Running simulation..."):
         sim_kwargs = dict(
             n_buses=int(n_buses),
             kwh_per_bus=float(kwh_per_bus),
             charger_kw=float(charger_kw),
-            window_hours=WINDOW_PRESETS[window_label],
+            window_hours=window_tuple,
         )
         if is_oracle:
             res = run_simulation(**sim_kwargs)
         else:
             res = run_simulation_deployable(**sim_kwargs)
 
+    # ---- Headline results ----
     st.subheader("Headline results")
 
     if is_oracle:
         st.caption(
-            "⚠️ **Upper bound only.** Theoretical maximum assuming perfect foresight; "
+            "**Upper bound only.** Theoretical maximum assuming perfect foresight; "
             "the deployable carbon saving is much smaller."
         )
 
@@ -77,6 +147,8 @@ if run:
 
     mode_note = "oracle / perfect foresight" if is_oracle else "deployable / frozen day-ahead ranking"
     st.caption(f"Based on {res['n_nights']} complete nights, window {window_label}, mode: {mode_note}.")
+
+    st.divider()
 
     # ---- Chart 1: Carbon-intensity profile across the charging window ----
     st.subheader("Grid Carbon-Intensity Profile")
@@ -114,7 +186,7 @@ if run:
 
     # ---- Chart 2: Schedule comparison for one example night ----
     strategy_label = "Carbon-optimal oracle" if is_oracle else "Deployable (frozen ranking)"
-    st.subheader(f"Example Night: Naive vs {strategy_label} Schedule")
+    st.subheader(f"Example Night: Naive vs {strategy_label}")
     ex = res["example_night"]
     ex_hours = ex["hours"]
     ex_labels = [f"{h:02d}:00" for h in ex_hours]
@@ -155,7 +227,7 @@ if run:
     )
     st.plotly_chart(fig2, use_container_width=True)
 
-    # ---- Chart 3: Cumulative CO₂ saved across the year ----
+    # ---- Chart 3: Cumulative CO2 saved across the year ----
     st.subheader("Cumulative CO₂ Saved Across the Year")
     if is_oracle:
         st.caption(
@@ -185,6 +257,8 @@ if run:
     )
     st.plotly_chart(fig3, use_container_width=True)
 
+    st.divider()
+
     # ---- Section 4: Sensitivity tornado chart ----
     st.subheader("Sensitivity Analysis")
     st.caption(
@@ -193,12 +267,12 @@ if run:
         "The diamond marks the default value."
     )
 
-    with st.spinner("Running sensitivity sweep…"):
+    with st.spinner("Running sensitivity sweep..."):
         sweeps = run_sensitivity(
             is_oracle=is_oracle,
             base_kwh=float(kwh_per_bus),
             base_kw=float(charger_kw),
-            base_window=WINDOW_PRESETS[window_label],
+            base_window=window_tuple,
             base_n_buses=int(n_buses),
         )
 
