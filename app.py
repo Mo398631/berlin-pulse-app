@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from engine import run_simulation, run_simulation_deployable, run_sensitivity
+from engine import run_simulation, run_simulation_deployable, run_sensitivity, load_dataset
 from scenario_engine import (
     compute_scenario, display_corridor_relief_pct,
     LOW as SCENARIO_LOW, MEDIUM as SCENARIO_MEDIUM, HIGH as SCENARIO_HIGH,
@@ -538,7 +538,141 @@ off-peak incentive scheme (≈ **8.5 %**).
     )
 
 with tab3:
-    st.info("Coming soon.")
+    st.title("Deployability Gap")
+    st.caption(
+        "Visualises the paper's Appendix B (Table B.2): how much of each "
+        "perfect-foresight saving survives once the operator is restricted to a "
+        "fixed, day-ahead-only ranking learned from history — split by channel "
+        "(carbon vs cost) and by window (train / test / full year)."
+    )
+
+    with st.expander("About this gap"):
+        st.markdown(
+            """
+The **oracle** rule reorders each night's charging hours using *that night's*
+realised grid mix or price — a perfect-foresight upper bound no operator can
+achieve. The **deployable** rule instead freezes a single hour-ranking learned
+on the training window (Jan–Sep) and applies it blind to every night, which is
+exactly what a real depot could run today with only day-ahead information.
+
+The gap between the two bars is the **foresight premium**: the part of the
+theoretical saving that depends on knowing the future and therefore does *not*
+transfer to deployment.
+
+- **Train** = Q1–Q3 (273 nights, the window the frozen ranking is learned on).
+- **Test** = Q4 (91 nights, genuinely out of sample).
+- **Full** = the full year (364 nights).
+
+The numbers are computed by `gate.deployability_results`, reusing the same
+simulation primitives as the gate — no physics is re-implemented here.
+            """
+        )
+
+    from gate import deployability_results
+
+    dep = deployability_results(load_dataset())
+
+    WINDOW_ORDER = [("train", "Train (Q1–Q3)"), ("test", "Test (Q4)"),
+                    ("full", "Full year")]
+    win_keys = [k for k, _ in WINDOW_ORDER]
+    win_labels = [lbl for _, lbl in WINDOW_ORDER]
+
+    COL_DEPLOY = "rgba(0,204,150,0.85)"   # deployable — what survives
+    COL_ORACLE = "rgba(99,110,250,0.85)"  # oracle — upper bound
+
+    def _channel_panel(channel, title, yaxis_title):
+        deploy_vals = [dep[k][channel]["deployable"] for k in win_keys]
+        oracle_vals = [dep[k][channel]["oracle"] for k in win_keys]
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=win_labels, y=deploy_vals, name="Deployable (frozen, day-ahead)",
+            marker_color=COL_DEPLOY,
+            text=[f"{v:.2f}%" for v in deploy_vals], textposition="outside",
+        ))
+        fig.add_trace(go.Bar(
+            x=win_labels, y=oracle_vals, name="Oracle (perfect foresight)",
+            marker_color=COL_ORACLE,
+            text=[f"{v:.2f}%" for v in oracle_vals], textposition="outside",
+        ))
+        ymax = max(oracle_vals + deploy_vals + [0.1]) * 1.25
+        fig.update_layout(
+            title=title,
+            xaxis_title="Window",
+            yaxis=dict(title=yaxis_title, range=[0, ymax]),
+            barmode="group",
+            legend=dict(orientation="h", yanchor="top", y=-0.18,
+                        xanchor="center", x=0.5),
+            margin=dict(t=50, b=70),
+            height=440,
+        )
+        return fig
+
+    panel_carbon, panel_cost = st.columns(2)
+    with panel_carbon:
+        st.plotly_chart(
+            _channel_panel("carbon", "Carbon channel", "CO₂ saving vs naive (%)"),
+            use_container_width=True,
+        )
+    with panel_cost:
+        st.plotly_chart(
+            _channel_panel("cost", "Cost channel", "Cost saving vs naive (%)"),
+            use_container_width=True,
+        )
+
+    # ---- Headline gap figures, in plain numbers ---------------------------------
+    c_dep_full = dep["full"]["carbon"]["deployable"]
+    c_orc_full = dep["full"]["carbon"]["oracle"]
+    k_dep_full = dep["full"]["cost"]["deployable"]
+    k_orc_full = dep["full"]["cost"]["oracle"]
+    k_dep_test = dep["test"]["cost"]["deployable"]
+    k_orc_test = dep["test"]["cost"]["oracle"]
+    cost_transfer = k_dep_test / k_orc_test * 100.0 if k_orc_test else 0.0
+
+    g1, g2, g3 = st.columns(3)
+    g1.metric("Deployable carbon (full yr)", f"{c_dep_full:.2f} %",
+              help=f"Oracle upper bound is {c_orc_full:.2f}%.")
+    g2.metric("Deployable cost (Q4, out of sample)", f"{k_dep_test:.2f} %",
+              help=f"Oracle upper bound is {k_orc_test:.2f}%.")
+    g3.metric("Cost saving retained out of sample", f"{cost_transfer:.0f} %",
+              help="Deployable Q4 cost saving as a share of the Q4 oracle.")
+
+    # ---- Plain-English explanation ----------------------------------------------
+    st.subheader("What the gap means")
+    st.markdown(
+        f"""
+The two channels behave very differently:
+
+- **Carbon: the saving lives entirely in the foresight gap.** The deployable
+  carbon rule collapses to **≈ 0%** on train, test, *and* the full year (green
+  bars flat to the floor). The frozen "cleanest-hours-first" ranking reduces to
+  ordinary naive charging because the **overnight carbon profile is nearly
+  flat** — every hour from 22:00 to 05:00 has almost the same grid intensity, so
+  a fixed ranking can't beat simply charging when the window opens. The
+  oracle's **{c_orc_full:.2f}%** full-year carbon saving exists *only* because it
+  exploits each night's tiny, unforecastable wiggles — it does not survive
+  deployment.
+
+- **Cost: the saving transfers out of sample almost intact.** The deployable
+  price rule captures **{k_dep_full:.2f}%** over the full year against an oracle
+  of **{k_orc_full:.2f}%**, and out of sample (Q4) it holds **{k_dep_test:.2f}%**
+  against a **{k_orc_test:.2f}%** oracle — roughly **{cost_transfer:.0f}% of the
+  oracle retained**. Day-ahead prices have a stable, learnable overnight shape
+  (consistently cheaper in the small hours), so a frozen ranking captures most
+  of the benefit.
+
+**The honest result:** the deployable **carbon co-benefit is near zero**, while
+the deployable **cost saving is robust** and survives out of sample. A real
+operator should expect meaningful cost savings from day-ahead-aware charging,
+but should *not* claim the headline oracle carbon figure as an achievable
+co-benefit.
+        """
+    )
+
+    st.caption(
+        "Computed from `gate.deployability_results` (Appendix B, Table B.2). "
+        "Bars are savings vs naive Strategy A; the frozen ranking is learned on "
+        "the training window and applied blind to every window."
+    )
 
 with tab4:
     st.info("Coming soon.")

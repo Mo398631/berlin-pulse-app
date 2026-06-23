@@ -83,6 +83,56 @@ def run(df, nights, ranker, slots):
     return (A_co2 - S_co2) / A_co2 * 100.0, (A_cost - S_cost) / A_cost * 100.0
 
 
+# ---- Appendix B Table B.2 results, importable --------------------------------
+
+def deployability_results(df):
+    """Assemble the Appendix B Table B.2 deployability figures as a dict.
+
+    For each of the CARBON and COST channels, returns the deployable
+    (blind / frozen training-window) rule and the perfect-foresight oracle,
+    over three windows: train (Q1-Q3, 273 nights), test (Q4, 91 nights) and
+    full year (364 nights).
+
+    No physics is rewritten: night_sets, frozen_orders,
+    order_from_clock_priority and run are reused exactly as the gate uses them.
+    The frozen orders are learned ONCE on the training window and applied
+    blind to every window, mirroring main()'s rankers.
+
+    Returns
+    -------
+    dict keyed by window name ('train', 'test', 'full'), each a dict:
+        {
+          'n_nights': int,
+          'carbon': {'deployable': pct, 'oracle': pct},
+          'cost':   {'deployable': pct, 'oracle': pct},
+        }
+    Percentages are savings vs naive Strategy A, identical convention to run().
+    """
+    full, train, q4 = night_sets(df)
+    carbon_clocks, price_clocks, _, _ = frozen_orders(df, train)
+    slots = slot_energies()
+
+    # Same rankers main() builds, on the reused argsort/order convention.
+    rank_carbon_oracle = lambda e, p, h: list(np.argsort(e, kind="stable"))
+    rank_price_oracle = lambda e, p, h: list(np.argsort(p, kind="stable"))
+    rank_frozen_carbon = lambda e, p, h: order_from_clock_priority(h, carbon_clocks)
+    rank_frozen_price = lambda e, p, h: order_from_clock_priority(h, price_clocks)
+
+    windows = {"train": train, "test": q4, "full": full}
+    out = {}
+    for name, nights in windows.items():
+        carbon_dep, _ = run(df, nights, rank_frozen_carbon, slots)
+        carbon_oracle, _ = run(df, nights, rank_carbon_oracle, slots)
+        _, cost_dep = run(df, nights, rank_frozen_price, slots)
+        _, cost_oracle = run(df, nights, rank_price_oracle, slots)
+        out[name] = {
+            "n_nights": len(nights),
+            "carbon": {"deployable": carbon_dep, "oracle": carbon_oracle},
+            "cost": {"deployable": cost_dep, "oracle": cost_oracle},
+        }
+    return out
+
+
 # ---- main --------------------------------------------------------------------
 
 def main():
