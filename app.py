@@ -3,6 +3,13 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from engine import run_simulation, run_simulation_deployable, run_sensitivity
+from scenario_engine import (
+    compute_scenario, display_corridor_relief_pct,
+    LOW as SCENARIO_LOW, MEDIUM as SCENARIO_MEDIUM, HIGH as SCENARIO_HIGH,
+    CORRIDOR_DISPLAY_BAND as SCENARIO_BAND,
+    INSINC_PEAK_SHIFT_PCT as INSINC_ANCHOR,
+    JR_EAST_PEAK_SHIFT_PCT as JR_EAST_ANCHOR,
+)
 
 st.set_page_config(page_title="Berlin Pulse Depot Charging Optimizer", layout="wide")
 
@@ -345,7 +352,190 @@ nights after excluding data-edge dates).
             st.plotly_chart(fig_t, use_container_width=True)
 
 with tab2:
-    st.info("Coming soon.")
+    st.title("Scenario Explorer")
+    st.caption(
+        "Interactive version of the paper's Section 6 congestion scenarios. "
+        "Move the adoption sliders (or pick a preset) to see how a modest "
+        "behavioural peak-shift cascades into network-wide and corridor-level "
+        "peak-trip relief."
+    )
+
+    with st.expander("About these scenarios"):
+        st.markdown(
+            """
+These are **illustrative what-if figures**, computed directly from the paper's
+Section 6 equations — they are *not* forecasts and rely on no operational data.
+
+The model is pure arithmetic, a chained product of adoption shares:
+
+```
+network_peak_reduction = registered_share x active_share x peak_shift_share
+corridor_relief        = network_peak_reduction / corridor_share
+```
+
+`corridor_share` defaults to **0.25**: the targeted corridors carry roughly a
+quarter of peak trips, so the same network-wide shift concentrates about
+four-fold on those corridors.
+
+The **peak-shift** slider is anchored to two real-world field programmes:
+the **INSINC** trial (≈ **7.49 %** of peak trips shifted) and **JR East**'s
+off-peak incentive scheme (≈ **8.5 %**).
+            """
+        )
+
+    # ---- Preset handling via session_state --------------------------------------
+    # Sliders are keyed; preset buttons write their values into session_state
+    # *before* the widgets are rendered (on_click runs first), so the sliders
+    # pick up the preset on the same rerun.
+    SC_DEFAULTS = {
+        "sc_registered": 20.0,   # %  (Medium preset as a sensible starting point)
+        "sc_active": 45.0,       # %
+        "sc_peak_shift": 7.5,    # %
+        "sc_corridor": 25.0,     # %
+        "sc_energy": 20.0,       # %
+    }
+    for _k, _v in SC_DEFAULTS.items():
+        if _k not in st.session_state:
+            st.session_state[_k] = _v
+
+    def _apply_scenario_preset(preset):
+        st.session_state["sc_registered"] = preset["registered_share"] * 100.0
+        st.session_state["sc_active"] = preset["active_share"] * 100.0
+        st.session_state["sc_peak_shift"] = preset["peak_shift_share"] * 100.0
+        st.session_state["sc_energy"] = preset["energy_shift_share"] * 100.0
+        # corridor_share stays at the user's current setting (0.25 default)
+
+    st.markdown("**Presets**")
+    pc1, pc2, pc3 = st.columns(3)
+    pc1.button("Low", use_container_width=True,
+               on_click=_apply_scenario_preset, args=(SCENARIO_LOW,))
+    pc2.button("Medium", use_container_width=True,
+               on_click=_apply_scenario_preset, args=(SCENARIO_MEDIUM,))
+    pc3.button("High", use_container_width=True,
+               on_click=_apply_scenario_preset, args=(SCENARIO_HIGH,))
+
+    st.markdown("**Adoption settings**")
+    sld1, sld2 = st.columns(2)
+    with sld1:
+        registered_pct = st.slider(
+            "Registered travellers (%)", 0.0, 100.0, step=1.0, key="sc_registered",
+            help="Share of travellers enrolled in the incentive scheme.",
+        )
+        active_pct = st.slider(
+            "Active responders among registered (%)", 0.0, 100.0, step=1.0,
+            key="sc_active",
+            help="Share of enrolled travellers who actually change behaviour.",
+        )
+        peak_shift_pct = st.slider(
+            "Peak trips shifted by an active user (%)", 0.0, 30.0, step=0.1,
+            key="sc_peak_shift",
+            help="Empirical anchors: INSINC 7.49%, JR East 8.5%.",
+        )
+    with sld2:
+        corridor_pct = st.slider(
+            "Corridor concentration (%)", 1.0, 100.0, step=1.0, key="sc_corridor",
+            help="Share of peak trips carried by the targeted corridors "
+                 "(paper default 25%).",
+        )
+        energy_pct = st.slider(
+            "Energy shifted (%)", 0.0, 100.0, step=1.0, key="sc_energy",
+            help="Share of energy demand shifted off-peak (reported alongside "
+                 "the trip figures).",
+        )
+
+    # ---- Compute (pure engine) ---------------------------------------------------
+    sc = compute_scenario(
+        registered_share=registered_pct / 100.0,
+        active_share=active_pct / 100.0,
+        peak_shift_share=peak_shift_pct / 100.0,
+        corridor_share=corridor_pct / 100.0,
+        energy_shift_share=energy_pct / 100.0,
+    )
+    corridor_display = display_corridor_relief_pct(sc["corridor_relief_pct"])
+    corridor_capped = corridor_display < sc["corridor_relief_pct"]
+
+    st.subheader("Scenario outcome")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Network-wide peak reduction", f"{sc['network_peak_reduction_pct']:.2f} %")
+    m2.metric(
+        "Corridor relief",
+        f"{corridor_display:.2f} %",
+        help=(f"Raw arithmetic value is {sc['corridor_relief_pct']:.2f} %; "
+              f"capped to the paper's {SCENARIO_BAND[0]:.0f}–{SCENARIO_BAND[1]:.0f}% "
+              "reported band for display." if corridor_capped else None),
+    )
+    m3.metric("Energy shifted off-peak", f"{sc['energy_shift_pct']:.0f} %")
+    if corridor_capped:
+        st.caption(
+            f"↑ Corridor relief is shown capped to the paper's reported "
+            f"{SCENARIO_BAND[0]:.0f}–{SCENARIO_BAND[1]:.0f}% band "
+            f"(raw arithmetic: {sc['corridor_relief_pct']:.1f}%)."
+        )
+
+    # ---- Comparison bar chart: current vs the three presets ----------------------
+    st.subheader("Your settings vs. the paper's presets")
+
+    scenarios = [("Your settings", dict(
+        registered_share=registered_pct / 100.0,
+        active_share=active_pct / 100.0,
+        peak_shift_share=peak_shift_pct / 100.0,
+        corridor_share=corridor_pct / 100.0,
+        energy_shift_share=energy_pct / 100.0,
+    ))]
+    for _name, _preset in [("Low", SCENARIO_LOW), ("Medium", SCENARIO_MEDIUM),
+                           ("High", SCENARIO_HIGH)]:
+        scenarios.append((_name, dict(_preset)))  # presets use the 0.25 default
+
+    labels = [name for name, _ in scenarios]
+    network_vals, corridor_vals = [], []
+    for _name, kwargs in scenarios:
+        r = compute_scenario(**kwargs)
+        network_vals.append(r["network_peak_reduction_pct"])
+        corridor_vals.append(display_corridor_relief_pct(r["corridor_relief_pct"]))
+
+    fig_sc = go.Figure()
+    fig_sc.add_trace(go.Bar(
+        x=labels, y=network_vals, name="Network-wide peak reduction (%)",
+        marker_color="rgba(99,110,250,0.75)",
+    ))
+    fig_sc.add_trace(go.Bar(
+        x=labels, y=corridor_vals, name="Corridor relief (%, capped)",
+        marker_color="rgba(0,204,150,0.75)",
+    ))
+    # Empirical peak-shift adoption anchors (input-side reference, shown for scale).
+    # Labels are pushed to the right side and staggered vertically (INSINC below
+    # its line, JR East above its line) so they clear the y-axis and each other.
+    fig_sc.add_hline(
+        y=INSINC_ANCHOR, line_dash="dash", line_color="rgba(239,85,59,0.9)",
+        annotation_text=f"INSINC {INSINC_ANCHOR:.2f}% peak-shift",
+        annotation_position="bottom right",
+    )
+    fig_sc.add_hline(
+        y=JR_EAST_ANCHOR, line_dash="dot", line_color="rgba(150,100,30,0.9)",
+        annotation_text=f"JR East {JR_EAST_ANCHOR:.1f}%",
+        annotation_position="top right",
+    )
+    fig_sc.update_layout(
+        title=dict(text="Illustrative Section 6 Scenario Outcomes",
+                   y=0.95, yanchor="top"),
+        xaxis_title="Scenario",
+        yaxis_title="Reduction / relief (%)",
+        barmode="group",
+        # Legend moved below the plot so it never touches the title.
+        legend=dict(orientation="h", yanchor="top", y=-0.22,
+                    xanchor="center", x=0.5),
+        margin=dict(t=70, b=90, r=40),
+        height=440,
+    )
+    st.plotly_chart(fig_sc, use_container_width=True)
+
+    st.caption(
+        "**Illustrative what-if figures from the paper's Section 6 equations — "
+        "not forecasts.** Bars are computed from the adoption sliders; the dashed "
+        "lines mark empirical *peak-shift* adoption levels from the INSINC "
+        "(7.49%) and JR East (8.5%) field programmes, shown as a real-world "
+        "reference for the peak-shift input."
+    )
 
 with tab3:
     st.info("Coming soon.")
