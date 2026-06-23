@@ -7,6 +7,8 @@ strategy_A / strategy_B / _evaluate / slot_energies primitives, changing only th
 ranking key passed in (intensity vs price vs a frozen training order).
 """
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -15,7 +17,7 @@ from baseline_simulation import (
     strategy_A, strategy_B, _evaluate, DEFAULTS,
 )
 
-PARQUET = "berlin_pulse_validated_dataset.parquet"
+PARQUET = Path(__file__).resolve().parent / "data" / "berlin_pulse_validated_dataset.parquet"
 CLOCK = [22, 23, 0, 1, 2, 3, 4]            # within-night chronological order
 N_BUSES = DEFAULTS["n_buses"]
 
