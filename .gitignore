@@ -21,3 +21,6 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+# Paper manuscript (not tracked in repo)
+paper/
