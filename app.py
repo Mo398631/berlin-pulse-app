@@ -675,7 +675,128 @@ co-benefit.
     )
 
 with tab4:
-    st.info("Coming soon.")
+    st.title("Robustness (Monte Carlo)")
+    st.caption(
+        "Appendix D, Pillar One: an emission-factor Monte Carlo on the carbon "
+        "saving. The four conventional direct-combustion factors are replaced by "
+        "distributions centred on the paper's values, drawn 10,000 times under a "
+        "fixed seed; each draw rebuilds the intensity series and re-runs Strategy "
+        "A vs B over the 364 complete nights."
+    )
+
+    with st.expander("About this test"):
+        st.markdown(
+            """
+The grid carbon-intensity series is built from per-technology generation using
+direct-combustion factors (lignite **1054**, hard coal **884**, fossil gas
+**401**, other conventional **700** g CO₂/kWh). How sensitive is the headline
+carbon saving to those exact numbers?
+
+This test treats them as distributions whose **mode/centre is the paper value**,
+so it measures the *spread around* the existing result rather than relocating it
+(Appendix D, Table D.1):
+
+| Source | Paper value | Distribution | Range (g/kWh) |
+|---|---|---|---|
+| Lignite | 1,054 | Triangular | 980 – 1,054 – 1,140 |
+| Hard coal | 884 | Triangular | 800 – 884 – 965 |
+| Fossil gas | 401 | Triangular | 350 – 401 – 500 |
+| Other conventional | 700 | Uniform | 500 – 900 |
+| Renewables, nuclear, biomass, pumped storage | 0 | Fixed | 0 |
+
+For each of **10,000** draws (seed `20250619`) the hourly intensity is rebuilt
+via `baseline_simulation.add_intensity`, Strategy A vs B are re-run over the 364
+complete nights using the reused scheduling primitives, and the carbon saving
+and the Appendix B flatness metric (the spread between the highest and lowest
+per-clock-hour mean intensity over the training window) are recorded.
+            """
+        )
+
+    @st.cache_data(show_spinner="Running the 10,000-draw emission-factor Monte Carlo (~45 s, computed once)...")
+    def _load_montecarlo():
+        from montecarlo_engine import run_emission_factor_mc
+        return run_emission_factor_mc(n_draws=10000, seed=20250619)
+
+    mc = _load_montecarlo()
+    savings = mc["carbon_savings"]
+    p5, p95 = mc["carbon_p5"], mc["carbon_p95"]
+    baseline_repro = mc["deterministic_baseline"]      # 2.388 reproduced anchor
+    paper_det = mc["paper_deterministic"]              # 2.41 published headline
+
+    # ---- Headline metrics --------------------------------------------------------
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Mean carbon saving", f"{mc['carbon_saving_mean']:.3f} %",
+              help="Paper Appendix D.2.2: 2.393%.")
+    m2.metric("Median carbon saving", f"{mc['carbon_saving_median']:.3f} %",
+              help="Paper Appendix D.2.2: 2.392%.")
+    m3.metric("90% interval", f"{p5:.3f} – {p95:.3f} %",
+              help="5th–95th percentile across 10,000 draws. Paper: 2.329–2.461%.")
+
+    # ---- Histogram of per-draw carbon savings -----------------------------------
+    fig_mc = go.Figure()
+
+    # Shade the 90% interval first so the bars and lines sit on top of it.
+    fig_mc.add_vrect(
+        x0=p5, x1=p95, fillcolor="rgba(0,204,150,0.12)", line_width=0,
+        annotation_text="90% interval", annotation_position="top left",
+    )
+    fig_mc.add_trace(go.Histogram(
+        x=savings, nbinsx=60, marker_color="rgba(99,110,250,0.65)",
+        name="Per-draw carbon saving",
+    ))
+    # Reference lines: reproduced baseline (2.388) and the paper's deterministic 2.41.
+    fig_mc.add_vline(
+        x=baseline_repro, line_dash="dash", line_color="rgb(0,150,110)",
+        annotation_text=f"Reproduced baseline {baseline_repro:.3f}%",
+        annotation_position="top right",
+    )
+    fig_mc.add_vline(
+        x=paper_det, line_dash="dot", line_color="rgb(239,85,59)",
+        annotation_text=f"Paper deterministic {paper_det:.2f}%",
+        annotation_position="bottom right",
+    )
+    fig_mc.update_layout(
+        title="Distribution of the Carbon Saving Across 10,000 Emission-Factor Draws",
+        xaxis_title="Carbon saving, Strategy B vs A (%)",
+        yaxis_title="Number of draws",
+        bargap=0.02,
+        legend=dict(orientation="h", yanchor="top", y=-0.18,
+                    xanchor="center", x=0.5),
+        margin=dict(t=50, b=60),
+        height=440,
+    )
+    st.plotly_chart(fig_mc, use_container_width=True)
+
+    # ---- Secondary metrics ------------------------------------------------------
+    s1, s2, s3 = st.columns(3)
+    s1.metric("Flatness (mean)", f"{mc['flatness_mean']:.2f} g/kWh",
+              help="Spread between the highest and lowest per-clock-hour mean "
+                   "intensity over the training window. Paper: 12.39 g/kWh. The "
+                   "overnight profile stays flat under every plausible factor "
+                   "combination.")
+    s2.metric("Max carbon saving (any draw)", f"{float(savings.max()):.3f} %",
+              help="Single-digit on every one of the 10,000 draws.")
+    s3.metric("Incidental cost saving (control)", f"{mc['cost_saving_mean']:.3f} %",
+              help="The cost of the carbon schedule, recorded as a control; it "
+                   "moves only trivially across the Monte Carlo.")
+
+    # ---- Caption / interpretation ------------------------------------------------
+    st.caption(
+        f"**The in-sample carbon ceiling is robust.** It stays single-digit "
+        f"(max {float(savings.max()):.2f}%) and near 2.4% across 10,000 plausible "
+        f"emission-factor combinations — the paper's deterministic {paper_det:.2f}% "
+        f"and the reproduced {baseline_repro:.3f}% baseline both fall inside the "
+        f"90% interval [{p5:.2f}, {p95:.2f}]. The flat-overnight-profile finding "
+        f"also survives: the flatness metric averages {mc['flatness_mean']:.2f} g/kWh, "
+        f"well within the band that makes a forecast-free carbon rule ineffective."
+    )
+
+    st.info(
+        "**Scope.** This is Appendix D **Pillar One** (the emission-factor "
+        "Monte Carlo). The consumption-based **Pillar Two** needs ENTSO-E "
+        "neighbour-zone import/export data that is not bundled with this app, and "
+        "is left as future work."
+    )
 
 with tab5:
     st.info("Coming soon.")
