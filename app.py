@@ -36,9 +36,8 @@ with tab1:
             """
 This interactive tool accompanies the research paper:
 
-> **Berlin Pulse: Carbon-Optimal Depot Charging for Electric Bus Fleets**
-> *Available on SSRN:* [link forthcoming]
-<!-- TODO: replace with actual SSRN URL once published -->
+> **Berlin Pulse: A Case Study of AI, Urban Mobility, and Energy-Aware Transport Policy**
+> *Available on SSRN:* [ssrn.com/abstract=6974299](https://ssrn.com/abstract=6974299)
 
 **What it does.** Berlin's electric bus fleet charges overnight at the depot.
 The grid's carbon intensity varies hour by hour depending on the generation mix
@@ -817,13 +816,16 @@ with tab5:
 
     with st.expander("About this model"):
         st.markdown(
-            r"""
+            """
 Appendix A poses a single social planner's problem and proves that its welfare
 function decomposes additively into two **non-interacting** blocks (Theorem A.22):
-
-$$W(\rho) \;=\; \underbrace{W^{*}_{\text{bus}}}_{\text{energy channel}} \;+\;
-\underbrace{W_{\text{pax}}(\rho)}_{\text{congestion channel}}$$
-
+an **energy channel** (the bus-side optimum) and a **congestion channel** (the
+passenger block).
+            """
+        )
+        st.latex(r"W(\rho) = W_{\mathrm{bus}}^{*} + W_{\mathrm{pax}}(\rho)")
+        st.markdown(
+            """
 **Channel separability (Eq. A.18, Corollary A.23).** The cross-partial Hessian
 of the two blocks vanishes, the constraint set factorizes, and so the constrained
 maximum decomposes. The practical payoff: the **bus-side optimum is identical for
@@ -831,33 +833,43 @@ every ρ** — the energy result of Section 4.7 / 6.5 stands on its own regardle
 of passenger uptake.
 
 **Passenger block (Section A.4).** The welfare gradient is *linear* in ρ
-(Eq. A.24f) and welfare is the concave quadratic that integrates it (Eq. A.24j):
-
-$$\frac{dW_{\text{pax}}}{d\rho} = A - B\,\rho,
-\qquad W_{\text{pax}}(\rho) = A\,\rho - \tfrac{1}{2}B\,\rho^{2}$$
-
-with aggregates built from the economic primitives:
-
-$$A = \tfrac{2\alpha}{K_{\text{peak}}} + \chi + \sigma\Delta\varepsilon - \beta\,\Delta t,
-\qquad B = 2\alpha\!\left(\tfrac{1}{K_{\text{peak}}}+\tfrac{1}{K_{\text{off}}}\right) + \chi .$$
-
-Because $B>0$ whenever $\alpha>0$, $W_{\text{pax}}$ is **strictly concave**:
-welfare rises with participation but with **diminishing marginal returns**. The
-factor of two on $\alpha$ is the Wardrop-vs-system-optimum gap — the planner
-internalizes the crowding externality the individual passenger ignores
-(Section A.2.5).
+(Eq. A.24f):
+            """
+        )
+        st.latex(r"\frac{dW_{\mathrm{pax}}}{d\rho} = A - B\,\rho")
+        st.markdown(
+            "and welfare is the concave quadratic that integrates it (Eq. A.24j):"
+        )
+        st.latex(r"W_{\mathrm{pax}}(\rho) = A\,\rho - \frac{1}{2}\,B\,\rho^{2}")
+        st.markdown("with the aggregates built from the economic primitives:")
+        st.latex(
+            r"A = \frac{2\alpha}{K_{\mathrm{peak}}} + \chi + \sigma\,\Delta\varepsilon"
+            r" - \beta\,\Delta t"
+        )
+        st.latex(
+            r"B = 2\alpha\left(\frac{1}{K_{\mathrm{peak}}}"
+            r" + \frac{1}{K_{\mathrm{off}}}\right) + \chi"
+        )
+        st.markdown(
+            """
+Because **B is positive** whenever **α is positive**, the passenger welfare is
+**strictly concave**: welfare rises with participation but with **diminishing
+marginal returns**. The factor of two on α is the Wardrop-vs-system-optimum gap
+— the planner internalizes the crowding externality the individual passenger
+ignores (Section A.2.5).
 
 **Energy block (Eq. A.9d / A.25).** The planner charges the nightly energy into
-the lowest-weight hours, ranked by the joint cost-and-carbon merit order
-$\pi_t + \sigma e_t$. The value shown is the fractional saving of that
-water-filling schedule over naive earliest-hours charging.
+the lowest-weight hours, ranked by the joint cost-and-carbon merit order (the
+hourly electricity price plus a carbon weight on each hour's emissions). The
+value shown is the fractional saving of that water-filling schedule over naive
+earliest-hours charging.
 
 > **This is a conceptual illustration, not a forecast.** The coefficients are
 > illustrative (in α-units) and are not Berlin elasticities. The defaults place
-> the unconstrained optimum $\rho^{*}=A/B$ **beyond** the displayed [0, 1]
+> the unconstrained optimum ρ\\* = A / B **beyond** the displayed [0, 1]
 > interval, so the curve is shown on its rising, concave arm. Pulling the
-> benefit sliders down (or raising β·Δt) moves $\rho^{*}$ into view and
-> reproduces the interior turning point of the paper's Fig. A.1.
+> benefit sliders down (or raising β·Δt) moves ρ\\* into view and reproduces the
+> interior turning point of the paper's Fig. A.1.
             """
         )
 

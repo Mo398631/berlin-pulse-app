@@ -1,6 +1,30 @@
-# Berlin Pulse Depot Charging Optimizer
+# Berlin Pulse
 
-A Streamlit web app for simulating and optimising electric bus depot charging schedules.
+A Streamlit web app accompanying the research paper:
+
+> **Berlin Pulse: A Case Study of AI, Urban Mobility, and Energy-Aware Transport Policy**
+> Available on SSRN: [ssrn.com/abstract=6974299](https://ssrn.com/abstract=6974299)
+
+The app simulates carbon-optimal overnight charging for Berlin's electric bus
+fleet using real SMARD grid data (2025), and exposes the paper's analysis
+through five interactive tabs.
+
+## Tabs
+
+1. **Depot Optimizer** — Compares naive chronological charging (Strategy A)
+   against carbon-optimal merit-order charging (Strategy B), in both an *oracle*
+   (perfect-foresight) and a *deployable* (fixed day-ahead ranking) mode.
+2. **Scenario Explorer** — Interactive version of the paper's Section 6
+   congestion scenarios, sweeping the passenger participation rate ρ.
+3. **Deployability Gap** — Visualises Appendix B (Table B.2): how much of the
+   perfect-foresight saving survives once the operator is restricted to a fixed,
+   day-ahead-only ranking, split by channel.
+4. **Robustness (Monte Carlo)** — Appendix D, Pillar One: a 10,000-draw
+   emission-factor Monte Carlo (fixed seed) on the carbon saving, re-running
+   Strategy A vs B over the 364 complete nights.
+5. **Unified Model** — A conceptual illustration of Appendix A, the
+   social-planner optimization: welfare W splits into a separable passenger
+   (congestion) block and bus (energy) block.
 
 ## Quick start
 
@@ -10,3 +34,23 @@ python -m venv .venv
 pip install -r requirements.txt
 streamlit run app.py
 ```
+
+## Tests
+
+The test suite covers the simulation engines behind each tab:
+
+- `test_engine.py` — Depot Optimizer engine
+- `test_scenario.py` — Scenario Explorer engine
+- `test_deployability.py` — Deployability Gap (gate) results
+- `test_montecarlo.py` — Monte Carlo emission-factor engine
+- `test_unified.py` — Unified Model welfare/optimization
+
+Run them all with:
+
+```bash
+python -m pytest
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
