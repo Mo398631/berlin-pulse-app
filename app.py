@@ -799,4 +799,245 @@ per-clock-hour mean intensity over the training window) are recorded.
     )
 
 with tab5:
-    st.info("Coming soon.")
+    from unified_model import (
+        welfare, marginal_welfare, bus_block_optimum, passenger_welfare,
+        welfare_aggregates, optimum_rho, scenario_rhos, SCENARIO_LABELS,
+        DEFAULT_PARAMS,
+    )
+
+    st.title("Unified Model")
+    st.caption(
+        "A conceptual illustration of Appendix A - the social-planner "
+        "optimization from which the paper's four claims are derived. Welfare "
+        "**W** splits into two independent channels: a passenger (congestion) "
+        "block driven by the participation rate **ρ**, and a bus (energy) block "
+        "solved by merit-order water-filling. The two are *separable*: the "
+        "energy-side optimum does not depend on ρ."
+    )
+
+    with st.expander("About this model"):
+        st.markdown(
+            r"""
+Appendix A poses a single social planner's problem and proves that its welfare
+function decomposes additively into two **non-interacting** blocks (Theorem A.22):
+
+$$W(\rho) \;=\; \underbrace{W^{*}_{\text{bus}}}_{\text{energy channel}} \;+\;
+\underbrace{W_{\text{pax}}(\rho)}_{\text{congestion channel}}$$
+
+**Channel separability (Eq. A.18, Corollary A.23).** The cross-partial Hessian
+of the two blocks vanishes, the constraint set factorizes, and so the constrained
+maximum decomposes. The practical payoff: the **bus-side optimum is identical for
+every ρ** — the energy result of Section 4.7 / 6.5 stands on its own regardless
+of passenger uptake.
+
+**Passenger block (Section A.4).** The welfare gradient is *linear* in ρ
+(Eq. A.24f) and welfare is the concave quadratic that integrates it (Eq. A.24j):
+
+$$\frac{dW_{\text{pax}}}{d\rho} = A - B\,\rho,
+\qquad W_{\text{pax}}(\rho) = A\,\rho - \tfrac{1}{2}B\,\rho^{2}$$
+
+with aggregates built from the economic primitives:
+
+$$A = \tfrac{2\alpha}{K_{\text{peak}}} + \chi + \sigma\Delta\varepsilon - \beta\,\Delta t,
+\qquad B = 2\alpha\!\left(\tfrac{1}{K_{\text{peak}}}+\tfrac{1}{K_{\text{off}}}\right) + \chi .$$
+
+Because $B>0$ whenever $\alpha>0$, $W_{\text{pax}}$ is **strictly concave**:
+welfare rises with participation but with **diminishing marginal returns**. The
+factor of two on $\alpha$ is the Wardrop-vs-system-optimum gap — the planner
+internalizes the crowding externality the individual passenger ignores
+(Section A.2.5).
+
+**Energy block (Eq. A.9d / A.25).** The planner charges the nightly energy into
+the lowest-weight hours, ranked by the joint cost-and-carbon merit order
+$\pi_t + \sigma e_t$. The value shown is the fractional saving of that
+water-filling schedule over naive earliest-hours charging.
+
+> **This is a conceptual illustration, not a forecast.** The coefficients are
+> illustrative (in α-units) and are not Berlin elasticities. The defaults place
+> the unconstrained optimum $\rho^{*}=A/B$ **beyond** the displayed [0, 1]
+> interval, so the curve is shown on its rising, concave arm. Pulling the
+> benefit sliders down (or raising β·Δt) moves $\rho^{*}$ into view and
+> reproduces the interior turning point of the paper's Fig. A.1.
+            """
+        )
+
+    # ---- Sliders for the main coefficients --------------------------------------
+    st.subheader("Passenger-block coefficients")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        u_alpha = st.slider(
+            "α — crowding aversion", 0.01, 1.00, float(DEFAULT_PARAMS["alpha"]),
+            0.01, help="Value passengers place on crowding relief. Raises both A "
+                       "and B; the factor-of-two internalization makes it the "
+                       "main driver of the welfare gain.",
+            key="um_alpha")
+        u_chi = st.slider(
+            "χ — operator crowding cost", 0.0, 1.0, float(DEFAULT_PARAMS["chi"]),
+            0.01, help="Convex operator cost of peak crowding (Section A.4.2). "
+                       "Adds equally to A and B.",
+            key="um_chi")
+    with c2:
+        u_beta = st.slider(
+            "β — schedule-delay coefficient", 0.0, 2.0, float(DEFAULT_PARAMS["beta"]),
+            0.01, help="Disutility of arriving Δt late. Enters A as −β·Δt, so it "
+                       "lowers the welfare value of shifting.",
+            key="um_beta")
+        u_dt = st.slider(
+            "Δt — shift magnitude (hours)", 0.0, 1.0, float(DEFAULT_PARAMS["dt"]),
+            0.05, help="Proposed time-shift (paper: 15–30 min ⇒ ~0.25–0.5 h).",
+            key="um_dt")
+    with c3:
+        u_sdE = st.slider(
+            "σ·Δε — carbon damage differential", 0.0, 2.0,
+            float(DEFAULT_PARAMS["sigma_dE"]), 0.01,
+            help="Social cost of carbon × peak-vs-off-peak per-trip emission gap. "
+                 "A pure benefit term: raises A only.",
+            key="um_sdE")
+        u_koff = st.slider(
+            "K_off — off-peak capacity", 0.25, 2.0, float(DEFAULT_PARAMS["K_off"]),
+            0.05, help="Off-peak service capacity (K_peak normalised to 1). Lower "
+                       "K_off ⇒ off-peak fills up faster ⇒ stronger curvature B.",
+            key="um_koff")
+
+    st.subheader("Energy-block (bus) coefficient")
+    e1, e2 = st.columns(2)
+    with e1:
+        u_sigma = st.slider(
+            "σ — carbon weight in merit order", 0.0, 5.0,
+            float(DEFAULT_PARAMS["sigma"]), 0.1,
+            help="Weight on grid carbon intensity vs price in the water-filling "
+                 "rank π_t + σ·e_t (Eq. A.9d). Affects only the energy channel.",
+            key="um_sigma")
+    with e2:
+        u_coupling = st.slider(
+            "coupling — passenger→bus (0 = separable)", 0.0, 5.0,
+            float(DEFAULT_PARAMS["coupling"]), 0.1,
+            help="The decoupling assumptions (DA1)–(DA4) set this to zero. At 0 "
+                 "the bus optimum is ρ-invariant (separability). Any positive "
+                 "value is the specification Section A.3.6 shows would break it.",
+            key="um_coupling")
+
+    params = {
+        "alpha": u_alpha, "beta": u_beta, "dt": u_dt, "chi": u_chi,
+        "sigma_dE": u_sdE, "K_peak": 1.0, "K_off": u_koff,
+        "sigma": u_sigma, "coupling": u_coupling,
+    }
+
+    A, B = welfare_aggregates(params)
+    rho_star = optimum_rho(params)
+    w_bus = bus_block_optimum(0.0, params)
+
+    # ---- Headline metrics -------------------------------------------------------
+    m1, m2, m3 = st.columns(3)
+    m1.metric("A — gradient intercept", f"{A:.3f}",
+              help="dW/dρ at ρ = 0 (Eq. A.24f).")
+    m2.metric("B — gradient slope", f"{B:.3f}",
+              help="Curvature; B > 0 ⇒ strictly concave, diminishing returns.")
+    m3.metric("ρ* = A/B — unconstrained optimum", f"{rho_star:.3f}",
+              help="Welfare-maximising participation (Eq. A.24i). Beyond 1 with "
+                   "the defaults, so [0,1] is the rising arm.")
+
+    # ---- Two-panel figure: W(rho) and dW/drho -----------------------------------
+    from plotly.subplots import make_subplots
+
+    rhos = [i / 200.0 for i in range(201)]          # 0.00 ... 1.00
+    w_curve = [welfare(r, params) for r in rhos]
+    g_curve = [marginal_welfare(r, params) for r in rhos]
+
+    scen_rhos = scenario_rhos()
+    scen_w = [welfare(r, params) for r in scen_rhos]
+    scen_g = [marginal_welfare(r, params) for r in scen_rhos]
+
+    fig_um = make_subplots(
+        rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.09,
+        subplot_titles=("Welfare  W*(ρ) = W*_bus + W_pax(ρ)",
+                        "Marginal welfare  dW*/dρ = A − B·ρ"),
+    )
+
+    # Top panel: total welfare.
+    fig_um.add_trace(go.Scatter(
+        x=rhos, y=w_curve, mode="lines", name="W*(ρ)",
+        line=dict(color="rgb(99,110,250)", width=3)), row=1, col=1)
+    # The bus-block constant floor (energy channel, ρ-invariant). The line stays
+    # at y = w_bus; the label is parked in the empty bottom-right of the panel
+    # (above the line, with a vertical gap) so it clears the green line, the blue
+    # curve, and the Low/Medium/High markers.
+    fig_um.add_hline(
+        y=w_bus, line_dash="dot", line_color="rgb(0,150,110)",
+        annotation_text=f"W*_bus = {w_bus:.4f} (energy channel, ρ-invariant)",
+        annotation_position="top right", annotation_yshift=14,
+        annotation_font_color="rgb(0,150,110)", row=1, col=1)
+    # Scenario points.
+    fig_um.add_trace(go.Scatter(
+        x=list(scen_rhos), y=scen_w, mode="markers+text",
+        text=SCENARIO_LABELS, textposition="top center",
+        marker=dict(color="rgb(239,85,59)", size=11, symbol="circle"),
+        name="Scenarios (ρ = 0.05, 0.20, 0.40)"), row=1, col=1)
+
+    # Bottom panel: marginal welfare.
+    fig_um.add_trace(go.Scatter(
+        x=rhos, y=g_curve, mode="lines", name="dW*/dρ",
+        line=dict(color="rgb(171,99,250)", width=3),
+        showlegend=True), row=2, col=1)
+    fig_um.add_hline(y=0.0, line_dash="dash", line_color="grey", row=2, col=1)
+    fig_um.add_trace(go.Scatter(
+        x=list(scen_rhos), y=scen_g, mode="markers+text",
+        text=SCENARIO_LABELS, textposition="top center",
+        marker=dict(color="rgb(239,85,59)", size=11, symbol="circle"),
+        showlegend=False), row=2, col=1)
+    # If the optimum falls inside the frame, mark it.
+    if 0.0 <= rho_star <= 1.0:
+        fig_um.add_vline(
+            x=rho_star, line_dash="dot", line_color="rgb(150,150,150)",
+            annotation_text=f"ρ* = {rho_star:.3f}",
+            annotation_position="top", row=1, col=1)
+        fig_um.add_vline(x=rho_star, line_dash="dot",
+                         line_color="rgb(150,150,150)", row=2, col=1)
+
+    fig_um.update_xaxes(title_text="Participation / registration rate  ρ",
+                        row=2, col=1)
+    fig_um.update_yaxes(title_text="Welfare (norm.)", row=1, col=1)
+    fig_um.update_yaxes(title_text="dW*/dρ", row=2, col=1)
+    fig_um.update_layout(
+        height=620, margin=dict(t=50, b=60),
+        legend=dict(orientation="h", yanchor="top", y=-0.12,
+                    xanchor="center", x=0.5),
+    )
+    st.plotly_chart(fig_um, use_container_width=True)
+
+    # ---- Plain-English explanation ----------------------------------------------
+    sep_note = (
+        "**zero (separable)**: the energy-side optimum is identical at every ρ"
+        if u_coupling == 0.0 else
+        f"**{u_coupling:.1f} (broken)**: a positive coupling makes the bus "
+        "optimum drift with ρ — the very specification Section A.3.6 flags"
+    )
+    st.markdown(
+        f"""
+**What the two panels say.**
+
+- **The channels are mathematically independent (separable).** The green dotted
+  floor in the top panel is the energy-channel optimum $W^{{*}}_{{\\text{{bus}}}}$.
+  It is a flat line because it **does not move with ρ** — the merit-order
+  water-filling result of the bus side stands on its own no matter how many
+  passengers participate. The passenger→bus coupling slider is currently
+  {sep_note}.
+
+- **Welfare rises with participation, with diminishing returns.** $W^{{*}}(ρ)$
+  climbs across the interval but **flattens** (top panel), because its slope
+  $dW^{{*}}/dρ = A − B·ρ$ falls **linearly** (bottom panel). Each extra
+  registrant adds less welfare than the last: the textbook concavity of
+  Eq. A.24j. The three scenario points (Low/Medium/High = ρ 0.05/0.20/0.40)
+  sit on the rising arm, so Medium beats Low and High beats Medium — the
+  paper's welfare ordering as a corollary of strict concavity, not three
+  separate stories.
+        """
+    )
+
+    st.caption(
+        "Conceptual illustration of Appendix A (Eq. A.17, A.18, A.24f, A.24j). "
+        "Coefficients are illustrative, in α-units, and are not Berlin "
+        "elasticities. The bus-block value is a fractional merit-order saving on "
+        "the illustrative overnight profile of Appendix B; no operational system "
+        "exists."
+    )
