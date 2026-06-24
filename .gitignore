@@ -24,3 +24,9 @@ Thumbs.db
 
 # Paper manuscript (not tracked in repo)
 paper/
+
+# Prototype tab (dev-only, large): raw OSMnx graph + GTFS feed
+prototype_raw/
+gtfs_raw/
+*.graphml
+cache/
