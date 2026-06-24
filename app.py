@@ -19,9 +19,9 @@ st.warning(
     "   or computed from public SMARD data, as described in the paper."
 )
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "Depot Optimizer", "Scenario Explorer", "Deployability Gap",
-    "Robustness (Monte Carlo)", "Unified Model",
+    "Robustness (Monte Carlo)", "Unified Model", "Network Prototype",
 ])
 
 with tab1:
@@ -1052,4 +1052,223 @@ earliest-hours charging.
         "elasticities. The bus-block value is a fractional merit-order saving on "
         "the illustrative overnight profile of Appendix B; no operational system "
         "exists."
+    )
+
+with tab6:
+    import json as _json
+    from pathlib import Path as _Path
+
+    import pydeck as pdk
+
+    from prototype_engine import simulate_redirection
+
+    st.title("Network Prototype")
+    st.caption(
+        "Map view of the Section 6 redirection prototype: it spreads the same "
+        "network-wide peak-shift across Berlin's named arterial corridors so you "
+        "can see *where* the relief lands."
+    )
+
+    # ---- STEP 2: mandatory honesty banner ---------------------------------------
+    st.warning(
+        "Illustrative simulation. Demand is synthetic and the redirection "
+        "mechanism reproduces the paper's Section 6 scenario figures on the real "
+        "Berlin street and bus network. This is not a deployed system and uses no "
+        "live or personal data."
+    )
+
+    # ---- STEP 3: controls (sliders + Low/Medium/High presets) -------------------
+    # Sliders are keyed; preset buttons write their values into session_state
+    # before the widgets render (on_click runs first), so the same rerun picks
+    # them up -- the pattern already used by the Scenario Explorer tab.
+    NP_DEFAULTS = {
+        "np_registered": 20.0,   # %  (Medium preset, a sensible starting point)
+        "np_active": 45.0,       # %
+        "np_peak_shift": 7.5,    # %
+        "np_corridor": 25.0,     # %  (corridor concentration, paper default)
+    }
+    for _k, _v in NP_DEFAULTS.items():
+        if _k not in st.session_state:
+            st.session_state[_k] = _v
+
+    def _apply_network_preset(preset):
+        st.session_state["np_registered"] = preset["registered_share"] * 100.0
+        st.session_state["np_active"] = preset["active_share"] * 100.0
+        st.session_state["np_peak_shift"] = preset["peak_shift_share"] * 100.0
+        # corridor concentration stays at the user's current setting (0.25 default)
+
+    st.markdown("**Presets** (Section 6 scenarios)")
+    pc1, pc2, pc3 = st.columns(3)
+    pc1.button("Low", use_container_width=True, key="np_preset_low",
+               on_click=_apply_network_preset, args=(SCENARIO_LOW,))
+    pc2.button("Medium", use_container_width=True, key="np_preset_med",
+               on_click=_apply_network_preset, args=(SCENARIO_MEDIUM,))
+    pc3.button("High", use_container_width=True, key="np_preset_high",
+               on_click=_apply_network_preset, args=(SCENARIO_HIGH,))
+
+    st.markdown("**Adoption settings**")
+    sc1, sc2 = st.columns(2)
+    with sc1:
+        np_registered_pct = st.slider(
+            "Registered travellers (%)", 0.0, 100.0, step=1.0,
+            key="np_registered",
+            help="Share of travellers enrolled in the incentive scheme.")
+        np_active_pct = st.slider(
+            "Active responders among registered (%)", 0.0, 100.0, step=1.0,
+            key="np_active",
+            help="Share of enrolled travellers who actually change behaviour.")
+    with sc2:
+        np_peak_shift_pct = st.slider(
+            "Peak trips shifted by an active user (%)", 0.0, 30.0, step=0.1,
+            key="np_peak_shift",
+            help="Empirical anchors: INSINC 7.49%, JR East 8.5%.")
+        np_corridor_pct = st.slider(
+            "Corridor concentration (%)", 1.0, 100.0, step=1.0,
+            key="np_corridor",
+            help="Share of peak trips carried by the targeted corridors "
+                 "(paper default 25%). Lower = the network shift concentrates "
+                 "more strongly on the targeted arterials.")
+
+    # ---- Compute the spatial redirection (pure engine, reconciled aggregates) ---
+    sim = simulate_redirection(
+        registered_share=np_registered_pct / 100.0,
+        active_share=np_active_pct / 100.0,
+        peak_shift_share=np_peak_shift_pct / 100.0,
+        corridor_share=np_corridor_pct / 100.0,
+    )
+
+    # ---- STEP 4: pydeck map -----------------------------------------------------
+    view = st.radio(
+        "Map view", ["Before", "After"], index=1, horizontal=True,
+        help="Colour each corridor by its peak load: 'Before' uses the baseline "
+             "peak, 'After' uses the post-redirection peak. Targeted corridors "
+             "shift visibly toward green; non-targeted ones barely change.")
+
+    def _as_lines(coords):
+        """Flatten GeoJSON LineString / MultiLineString coords to a list of lines.
+
+        Each returned line is a list of [lon, lat] pairs, ready for a pydeck
+        PathLayer `path`.
+        """
+        if not coords:
+            return []
+        first = coords[0]
+        if (isinstance(first, (list, tuple)) and len(first) == 2
+                and all(isinstance(v, (int, float)) for v in first)):
+            return [coords]                      # already a single line
+        lines = []
+        for sub in coords:
+            lines.extend(_as_lines(sub))
+        return lines
+
+    # Colour scale: normalise each corridor's load against the global BEFORE peak
+    # so the scale is identical in both views. High load -> red, low -> green;
+    # because the After view uses the (smaller) after_peak on the same scale,
+    # relieved corridors slide down toward green.
+    max_before = max((c["before_peak"] for c in sim["per_corridor"]), default=1.0) or 1.0
+
+    def _load_color(load):
+        t = min(max(load / max_before, 0.0), 1.0)
+        r = int(220 * t + 30)
+        g = int(200 * (1.0 - t) + 30)
+        return [r, g, 45]
+
+    corridor_rows = []
+    for c in sim["per_corridor"]:
+        load = c["before_peak"] if view == "Before" else c["after_peak"]
+        color = _load_color(load)
+        for line in _as_lines(c["coords"]):
+            corridor_rows.append({
+                "name": c["name"],
+                "path": [[float(x), float(y)] for x, y in line],
+                "color": color,
+                "before_peak": int(round(c["before_peak"])),
+                "after_peak": int(round(c["after_peak"])),
+                "relief_pct": round(c["relief_pct"], 1),
+                "targeted": "targeted" if c["targeted"] else "non-targeted",
+            })
+
+    layers = []
+
+    # Faint secondary layer: the real BVG bus lines, if the file is present.
+    _bus_path = _Path(__file__).resolve().parent / "prototype_data" / "bus_lines.geojson"
+    if _bus_path.exists():
+        try:
+            with open(_bus_path, "r", encoding="utf-8") as _fh:
+                _bus_fc = _json.load(_fh)
+            bus_rows = []
+            for _feat in _bus_fc.get("features", []):
+                _geom = (_feat.get("geometry") or {}).get("coordinates")
+                for _line in _as_lines(_geom):
+                    bus_rows.append({"path": [[float(x), float(y)] for x, y in _line]})
+            if bus_rows:
+                layers.append(pdk.Layer(
+                    "PathLayer", data=bus_rows, get_path="path",
+                    get_color=[150, 150, 160], get_width=12,
+                    width_min_pixels=1, width_max_pixels=3,
+                    opacity=0.25, pickable=False,
+                ))
+        except (OSError, ValueError, KeyError):
+            pass   # the bus layer is optional decoration; never block the map
+
+    # Primary layer: the corridors, coloured by load.
+    layers.append(pdk.Layer(
+        "PathLayer", data=corridor_rows, get_path="path",
+        get_color="color", get_width=30,
+        width_min_pixels=3, width_max_pixels=9,
+        pickable=True, auto_highlight=True,
+    ))
+
+    deck = pdk.Deck(
+        layers=layers,
+        initial_view_state=pdk.ViewState(
+            latitude=52.52, longitude=13.405, zoom=11, pitch=0,
+        ),
+        map_provider="carto",
+        map_style="road",
+        tooltip={
+            "html": "<b>{name}</b> ({targeted})<br/>"
+                    "Before peak: {before_peak}<br/>"
+                    "After peak: {after_peak}<br/>"
+                    "Relief: {relief_pct}%",
+            "style": {"backgroundColor": "rgba(20,20,30,0.9)", "color": "white"},
+        },
+    )
+    st.pydeck_chart(deck, use_container_width=True)
+    st.caption(
+        "Red = high peak load, green = relieved. Bus lines (BVG) are the faint "
+        "grey background layer. Switch between **Before** and **After** to watch "
+        "the targeted corridors slide toward green while the rest hold steady. "
+        "Geometry is the real Berlin street/bus network; the peak loads are "
+        "synthetic, seeded demand — not measured traffic."
+    )
+
+    # ---- STEP 5: metrics, corridor table, reconciliation caption ----------------
+    st.subheader("Aggregate outcome")
+    np_corridor_display = display_corridor_relief_pct(sim["corridor_relief_pct"])
+    np_capped = np_corridor_display < sim["corridor_relief_pct"]
+    nm1, nm2 = st.columns(2)
+    nm1.metric("Network-wide peak reduction",
+               f"{sim['network_peak_reduction_pct']:.2f} %")
+    nm2.metric(
+        "Corridor relief",
+        f"{np_corridor_display:.2f} %",
+        help=(f"Raw arithmetic value is {sim['corridor_relief_pct']:.2f} %; "
+              f"capped to the paper's {SCENARIO_BAND[0]:.0f}-{SCENARIO_BAND[1]:.0f}% "
+              "reported band for display, exactly as the Scenario Explorer tab "
+              "does." if np_capped else None))
+
+    np_df = pd.DataFrame([{
+        "Corridor": c["name"],
+        "Targeted": "Yes" if c["targeted"] else "No",
+        "Before peak": int(round(c["before_peak"])),
+        "After peak": int(round(c["after_peak"])),
+        "Relief %": round(c["relief_pct"], 2),
+    } for c in sim["per_corridor"]])
+    st.dataframe(np_df, use_container_width=True, hide_index=True)
+
+    st.caption(
+        "These aggregate figures match the Scenario Explorer tab because they use "
+        "the same validated Section 6 model; the map only distributes the effect "
+        "spatially over illustrative demand."
     )
