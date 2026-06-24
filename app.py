@@ -61,6 +61,9 @@ sensitivity tornado chart.
 **Data source.** Hourly generation and day-ahead price data from
 [SMARD.de](https://www.smard.de) for the calendar year 2025 (364 complete
 nights after excluding data-edge dates).
+
+**Data attribution.** Street data © OpenStreetMap contributors (ODbL);
+transit data © VBB Verkehrsverbund Berlin-Brandenburg GmbH (CC BY).
             """
         )
 

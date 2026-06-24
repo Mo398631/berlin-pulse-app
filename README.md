@@ -7,7 +7,10 @@ A Streamlit web app accompanying the research paper:
 
 The app simulates carbon-optimal overnight charging for Berlin's electric bus
 fleet using real SMARD grid data (2025), and exposes the paper's analysis
-through five interactive tabs.
+through six interactive tabs.
+
+All figures are illustrative simulations with synthetic demand — no operational
+system exists.
 
 ## Tabs
 
@@ -25,6 +28,10 @@ through five interactive tabs.
 5. **Unified Model** — A conceptual illustration of Appendix A, the
    social-planner optimization: welfare W splits into a separable passenger
    (congestion) block and bus (energy) block.
+6. **Network Prototype** — Map view of the Section 6 redirection prototype:
+   spreads the network-wide peak-shift across Berlin's named arterial corridors
+   so you can see *where* the relief lands, with Before/After toggle and
+   per-corridor metrics.
 
 ## Quick start
 
@@ -44,12 +51,18 @@ The test suite covers the simulation engines behind each tab:
 - `test_deployability.py` — Deployability Gap (gate) results
 - `test_montecarlo.py` — Monte Carlo emission-factor engine
 - `test_unified.py` — Unified Model welfare/optimization
+- `test_prototype.py` — Network Prototype redirection + reconciliation
 
 Run them all with:
 
 ```bash
 python -m pytest
 ```
+
+## Data attribution
+
+Street data © OpenStreetMap contributors (ODbL); transit data © VBB
+Verkehrsverbund Berlin-Brandenburg GmbH (CC BY).
 
 ## License
 
