@@ -7,7 +7,7 @@ A Streamlit web app accompanying the research paper:
 
 The app simulates carbon-optimal overnight charging for Berlin's electric bus
 fleet using real SMARD grid data (2025), and exposes the paper's analysis
-through six interactive tabs.
+through seven interactive tabs.
 
 All figures are illustrative simulations with synthetic demand — no operational
 system exists.
@@ -32,6 +32,11 @@ system exists.
    spreads the network-wide peak-shift across Berlin's named arterial corridors
    so you can see *where* the relief lands, with Before/After toggle and
    per-corridor metrics.
+7. **Berlin Pulse Rider** — an interactive mock-phone demo where the visitor
+   plays a Berlin rider, experiences the Section 5.3 incentive logic on
+   synthetic data, earns illustrative rewards, and pulls a compliance slider to
+   see the paper's real finding: big corridor relief, tiny network effect. No
+   backend, no language model, session-only.
 
 ## Quick start
 
@@ -52,6 +57,7 @@ The test suite covers the simulation engines behind each tab:
 - `test_montecarlo.py` — Monte Carlo emission-factor engine
 - `test_unified.py` — Unified Model welfare/optimization
 - `test_prototype.py` — Network Prototype redirection + reconciliation
+- `test_rider.py` — Berlin Pulse Rider engine + reward logic + reconciliation
 
 Run them all with:
 
