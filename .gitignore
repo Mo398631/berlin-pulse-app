@@ -30,3 +30,4 @@ prototype_raw/
 gtfs_raw/
 *.graphml
 cache/
+crossgrid_raw/
