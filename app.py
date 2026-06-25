@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from engine import run_simulation, run_simulation_deployable, run_sensitivity, load_dataset
+from crossgrid_engine import compare_grids
 from scenario_engine import (
     compute_scenario, display_corridor_relief_pct,
     LOW as SCENARIO_LOW, MEDIUM as SCENARIO_MEDIUM, HIGH as SCENARIO_HIGH,
@@ -19,10 +20,10 @@ st.warning(
     "   or computed from public SMARD data, as described in the paper."
 )
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "Depot Optimizer", "Scenario Explorer", "Deployability Gap",
     "Robustness (Monte Carlo)", "Unified Model", "Network Prototype",
-    "Berlin Pulse Rider",
+    "Berlin Pulse Rider", "Cross-Grid Comparison",
 ])
 
 with tab1:
@@ -2275,4 +2276,161 @@ with tab7:
         "`rider_engine.aggregate_effect`, which reports the Scenario Explorer's "
         "numbers verbatim — set that tab to registered 20%, active "
         f"{reveal_compliance_pct:.0f}%, peak-shift 7.5% to read the identical values."
+    )
+
+with tab8:
+    from plotly.subplots import make_subplots as _make_subplots
+
+    # ---- STEP 2: run the cross-grid comparison once per session -----------------
+    @st.cache_data(show_spinner="Running the depot optimizer across five European grids...")
+    def _load_crossgrid():
+        return compare_grids()
+
+    cg_results = _load_crossgrid()
+    cg_by_code = {r["code"]: r for r in cg_results}
+
+    # Fixed x-axis order required by the spec: DE, FR, PL, NO2, ES.
+    CG_ORDER = ["DE", "FR", "PL", "NO2", "ES"]
+    CG_WINDOW_HOURS = [22, 23, 0, 1, 2, 3, 4]
+    cg_ordered = [cg_by_code[c] for c in CG_ORDER]
+
+    # ---- STEP 3: intro ----------------------------------------------------------
+    st.title("Cross-Grid Comparison")
+    st.markdown(
+        "This tab runs the **same validated depot-charging optimizer** — the one "
+        "behind the Berlin result — on five real European grids (ENTSO-E "
+        "Transparency Platform data, 2025), with **Germany as the paper's "
+        "validated SMARD anchor**, to test whether the Berlin finding generalises. "
+        "Results are reported as **percentage savings**, which are "
+        "fleet-independent and therefore directly comparable across cities. Real "
+        "data, real findings."
+    )
+
+    # ---- STEP 4: grouped savings bar chart --------------------------------------
+    st.subheader("Carbon and cost savings by grid")
+    cg_labels = [
+        f"{r['label']} (anchor)" if r["code"] == "DE" else r["label"]
+        for r in cg_ordered
+    ]
+    cg_carbon = [r["carbon_saving_pct"] for r in cg_ordered]
+    cg_cost = [r["cost_saving_pct"] for r in cg_ordered]
+    # Germany (the validated anchor) gets a distinct dark border on both bars.
+    # marker.line takes per-bar arrays (one Line with list-valued color/width),
+    # not a list of Line dicts.
+    cg_border_color = [
+        "rgb(20,20,20)" if r["code"] == "DE" else "rgba(0,0,0,0)"
+        for r in cg_ordered
+    ]
+    cg_border_width = [3 if r["code"] == "DE" else 0 for r in cg_ordered]
+    cg_border = dict(color=cg_border_color, width=cg_border_width)
+
+    fig_cg = go.Figure()
+    fig_cg.add_trace(go.Bar(
+        x=cg_labels, y=cg_carbon, name="Carbon saving (%)",
+        marker=dict(color="rgba(0,204,150,0.80)", line=cg_border),
+        text=[f"{v:.2f}%" for v in cg_carbon], textposition="outside",
+    ))
+    fig_cg.add_trace(go.Bar(
+        x=cg_labels, y=cg_cost, name="Cost saving (%)",
+        marker=dict(color="rgba(99,110,250,0.80)", line=cg_border),
+        text=[f"{v:.2f}%" for v in cg_cost], textposition="outside",
+    ))
+    fig_cg.update_layout(
+        title="Percentage Savings — Same Optimizer, Five Grids "
+              "(Germany = validated SMARD anchor)",
+        xaxis_title="Grid",
+        yaxis=dict(title="Saving vs naive charging (%)",
+                   range=[0, max(cg_carbon + cg_cost) * 1.2]),
+        barmode="group",
+        legend=dict(orientation="h", yanchor="top", y=-0.18,
+                    xanchor="center", x=0.5),
+        margin=dict(t=60, b=60),
+        height=440,
+    )
+    st.plotly_chart(fig_cg, use_container_width=True)
+    st.caption(
+        "Germany is outlined in black — it is the paper's validated SMARD anchor "
+        "(2.39% carbon / 4.85% cost); the other four grids run the identical "
+        "optimizer on ENTSO-E data."
+    )
+
+    # ---- STEP 5: overnight intensity small-multiples ----------------------------
+    st.subheader("Why the percentages differ: overnight intensity profiles")
+    cg_hour_labels = [f"{h:02d}:00" for h in CG_WINDOW_HOURS]
+    fig_sm = _make_subplots(
+        rows=1, cols=5, shared_yaxes=False,
+        subplot_titles=[r["label"] for r in cg_ordered],
+        horizontal_spacing=0.04,
+    )
+    for i, r in enumerate(cg_ordered, start=1):
+        prof = r["overnight_profile"]
+        yvals = [prof[h] for h in CG_WINDOW_HOURS]
+        fig_sm.add_trace(go.Scatter(
+            x=cg_hour_labels, y=yvals, mode="lines+markers",
+            line=dict(color="rgb(99,110,250)", width=2),
+            marker=dict(size=4), showlegend=False,
+        ), row=1, col=i)
+        fig_sm.update_xaxes(tickangle=-45, row=1, col=i)
+    fig_sm.update_yaxes(title_text="g CO₂/kWh", row=1, col=1)
+    fig_sm.update_layout(
+        title="Average Overnight Carbon-Intensity Profile Across the Charging "
+              "Window (22:00 → 04:00)",
+        margin=dict(t=70, b=50),
+        height=340,
+    )
+    st.plotly_chart(fig_sm, use_container_width=True)
+    st.caption(
+        "Each mini-chart shows that grid's mean carbon intensity across the "
+        "charging-window hours 22, 23, 0, 1, 2, 3, 4. The carbon saving "
+        "percentage tracks how much this profile *varies* overnight — flat "
+        "profiles leave the optimizer little to exploit, regardless of how clean "
+        "the grid is on average."
+    )
+
+    # ---- STEP 6: summary table --------------------------------------------------
+    st.subheader("Summary table")
+    cg_table = pd.DataFrame([
+        {
+            "Country": r["label"],
+            "Mean Intensity (gCO2/kWh)": round(r["mean_intensity"], 2),
+            "Carbon Saving (%)": round(r["carbon_saving_pct"], 2),
+            "Cost Saving (%)": round(r["cost_saving_pct"], 2),
+        }
+        for r in cg_ordered
+    ])
+    st.dataframe(cg_table, hide_index=True, use_container_width=True)
+
+    # ---- STEP 7: honest finding -------------------------------------------------
+    st.info(
+        "**What the real numbers show.**\n\n"
+        "- **The scheduling method transfers everywhere on cost.** Every grid "
+        "posts a positive cost saving, and it is substantial for four of the "
+        "five — France 13.81%, Spain 10.50%, Germany 4.85%, Poland 3.11%. Norway "
+        "is the lone exception at just 0.81%, because its near-total-hydro grid "
+        "has an almost flat overnight price curve, leaving little to optimise. "
+        "The day-ahead-price logic that worked in Berlin works across Europe.\n\n"
+        "- **The carbon saving percentage measures overnight intensity "
+        "*variability*, not average grid cleanliness.** France's high 12.97% "
+        "comes from nuclear output ramping across the night (a swingy overnight "
+        "profile), while Poland's low 1.16% comes from a coal-dominated grid that "
+        "stays almost flat hour to hour — both follow from the shape of the "
+        "profile, not from how clean or dirty the grid is.\n\n"
+        "- **In absolute terms, clean grids avoid far less CO₂ per bus per "
+        "year.** A large percentage on a clean grid is a large slice of a tiny "
+        "number: Norway (mean ≈ 1.6 gCO₂/kWh) and France (≈ 17 gCO₂/kWh) avoid "
+        "only a few kilograms of CO₂ per bus annually, whereas coal-heavy Poland "
+        "(≈ 587 gCO₂/kWh) avoids far more real CO₂ per bus even though its "
+        "percentage looks small.\n\n"
+        "- **Spain data note (transparency).** The April 2025 Iberian Peninsula "
+        "blackout left **35 hours of missing telemetry** in the Spain ENTSO-E "
+        "series. Those hours were gap-filled using the adjacent valid generation "
+        "mix (see `crossgrid_engine._repair_missing_hours`); it is documented "
+        "here so the Spain figures are not mistaken for fully continuous data."
+    )
+
+    # ---- STEP 8: data attribution ----------------------------------------------
+    st.caption(
+        "Generation and price data: ENTSO-E Transparency Platform (2025). "
+        "Germany: validated SMARD 2025 dataset (paper anchor, 2.3884% carbon / "
+        "4.8482% cost saving)."
     )
