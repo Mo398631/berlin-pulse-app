@@ -1388,6 +1388,104 @@ _RIDER_COMPONENT_TEMPLATE = r"""
   .reward-line:last-child{border-bottom:0;}
   .reward-line b{color:var(--accent);}
   .partner{font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.4;}
+
+  /* ---- loading: "reading the network" with rotating tips / facts / jokes ---- */
+  .load-title{margin-top:24px;font-size:16px;font-weight:650;color:var(--text);
+    letter-spacing:.2px;}
+  .tipcard{margin-top:22px;width:100%;max-width:300px;background:var(--panel);
+    border:1px solid var(--line);border-radius:14px;padding:16px;min-height:116px;
+    display:flex;flex-direction:column;gap:10px;align-items:flex-start;
+    transition:opacity .32s ease,transform .32s ease;}
+  .tipcard.fade{opacity:0;transform:translateY(7px);}
+  .tiplabel{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+    color:var(--accent);background:var(--accent-soft);
+    border:1px solid rgba(29,158,117,.35);border-radius:999px;padding:3px 10px;}
+  .tiplabel.joke{color:var(--warn);background:rgba(227,160,8,.12);
+    border-color:rgba(227,160,8,.4);}
+  .tiplabel.fact{color:#79c0ff;background:rgba(56,139,253,.12);
+    border-color:rgba(56,139,253,.4);}
+  .tiptext{font-size:13.5px;line-height:1.5;color:var(--text);text-align:left;}
+  .loaddots{display:flex;gap:6px;margin-top:20px;}
+  .loaddots i{width:6px;height:6px;border-radius:50%;background:var(--muted);
+    opacity:.4;animation:ld 1.2s ease-in-out infinite;}
+  .loaddots i:nth-child(2){animation-delay:.18s;}
+  .loaddots i:nth-child(3){animation-delay:.36s;}
+  @keyframes ld{0%,100%{opacity:.35;transform:translateY(0);}
+    50%{opacity:1;transform:translateY(-3px);}}
+
+  /* ---- confetti burst (pure CSS/JS, no libraries) ---- */
+  #confetti{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:30;}
+  .confetti-pc{position:absolute;top:-16px;border-radius:2px;will-change:transform,opacity;
+    animation:confFall linear forwards;}
+  @keyframes confFall{0%{transform:translateY(0) rotateZ(0);opacity:1;}
+    100%{transform:translateY(780px) rotateZ(560deg);opacity:.9;}}
+
+  /* ---- arrival celebration extras ---- */
+  .walletrow{text-align:center;color:var(--muted);font-size:13px;margin:0 0 10px;}
+  .walletrow b{color:var(--accent);}
+  .ticket{position:relative;display:flex;align-items:center;gap:12px;margin:12px 0 2px;
+    padding:14px 16px;border-radius:14px;color:#04130d;overflow:hidden;
+    background:linear-gradient(110deg,#27d99a,#1d9e75);
+    box-shadow:0 8px 22px rgba(29,158,117,.35);}
+  .ticket::after{content:"";position:absolute;top:0;left:-60%;width:55%;height:100%;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);
+    animation:shine 2.2s ease-in-out infinite;}
+  @keyframes shine{0%{left:-60%;}55%,100%{left:135%;}}
+  .ticket .tk-ico{font-size:24px;animation:wiggle 1.8s ease-in-out infinite;}
+  @keyframes wiggle{0%,100%{transform:rotate(-8deg);}50%{transform:rotate(8deg);}}
+  .ticket .tk-main{font-weight:750;font-size:14px;}
+  .ticket .tk-sub{font-size:11px;opacity:.85;}
+  .co2line{text-align:center;font-size:12.5px;color:var(--accent);margin:12px 0 6px;
+    line-height:1.5;}
+  .co2line b{color:var(--text);} .co2line small{color:var(--muted);}
+
+  /* ---- bottom tab bar ---- */
+  #tabbar{display:flex;border-top:1px solid var(--line);background:rgba(0,0,0,.25);}
+  .tabbtn{flex:1;border:0;background:transparent;cursor:pointer;color:var(--muted);
+    padding:9px 0 8px;font-size:10.5px;font-weight:600;display:flex;
+    flex-direction:column;align-items:center;gap:3px;transition:.15s;}
+  .tabbtn:hover{color:var(--text);} .tabbtn.sel{color:var(--accent);}
+  .tabbtn .ti{font-size:18px;line-height:1;}
+
+  /* ---- rewards screen ---- */
+  .wallet-hero{margin:8px 0 4px;padding:18px;border-radius:16px;text-align:center;
+    background:radial-gradient(circle at 50% 0%,var(--accent-soft),var(--panel) 72%);
+    border:1px solid rgba(29,158,117,.35);}
+  .wallet-hero-pts{font-size:34px;font-weight:800;color:var(--accent);line-height:1;}
+  .wallet-hero-lbl{font-size:12px;color:var(--muted);margin-top:4px;
+    text-transform:uppercase;letter-spacing:1px;}
+  .rw-stats{display:flex;gap:10px;margin:10px 0;}
+  .rw-stat{flex:1;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:11px;text-align:center;}
+  .rw-stat b{display:block;font-size:20px;color:var(--text);}
+  .rw-stat small{color:var(--muted);font-size:11px;}
+  .illus{font-size:9.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+    color:var(--warn);background:rgba(227,160,8,.12);border:1px solid rgba(227,160,8,.4);
+    border-radius:999px;padding:2px 7px;margin-left:6px;vertical-align:middle;}
+  .challenge{display:flex;flex-direction:column;gap:9px;}
+  .challenge .ch-top{display:flex;justify-content:space-between;font-size:13.5px;
+    color:var(--text);}
+  .challenge .ch-top b{color:var(--accent);}
+  .ch-bar{height:8px;border-radius:999px;background:var(--panel2);overflow:hidden;}
+  .ch-fill{height:100%;border-radius:999px;background:var(--accent);transition:width .4s ease;}
+  .badges{display:flex;gap:9px;}
+  .badge{flex:1;text-align:center;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:12px 6px;opacity:.45;filter:grayscale(1);transition:.25s;}
+  .badge.earned{opacity:1;filter:none;border-color:rgba(29,158,117,.45);
+    background:var(--accent-soft);}
+  .badge .bi{font-size:24px;line-height:1;}
+  .badge .bl{font-size:10.5px;margin-top:6px;color:var(--text);line-height:1.25;}
+  .perk{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:11px 13px;margin:8px 0;}
+  .perk .pk-name{font-size:13px;color:var(--text);}
+  .perk .pk-cost{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .perk .pk-state{font-size:11px;font-weight:650;white-space:nowrap;padding:5px 10px;
+    border-radius:999px;}
+  .perk .pk-state.ok{color:var(--accent);background:var(--accent-soft);
+    border:1px solid rgba(29,158,117,.4);}
+  .perk .pk-state.locked{color:var(--muted);background:var(--panel2);
+    border:1px solid var(--line);}
 </style>
 
 <div id="stage">
@@ -1425,11 +1523,16 @@ _RIDER_COMPONENT_TEMPLATE = r"""
         <button class="btn" onclick="findRoute()">Find my route</button>
       </section>
 
-      <!-- c) LOADING -->
+      <!-- c) LOADING: "reading the network" + rotating tips / facts / jokes -->
       <section class="screen" id="s-loading">
         <div class="loadwrap">
           <div class="pulse"></div>
-          <div class="status" id="loadStatus">Reading the network&hellip;</div>
+          <div class="load-title">Reading the network&hellip;</div>
+          <div class="tipcard" id="tipCard">
+            <span class="tiplabel" id="tipLabel">TIP</span>
+            <div class="tiptext" id="tipText"></div>
+          </div>
+          <div class="loaddots"><i></i><i></i><i></i></div>
         </div>
       </section>
 
@@ -1447,15 +1550,62 @@ _RIDER_COMPONENT_TEMPLATE = r"""
         <svg class="map" id="map" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid meet"></svg>
       </section>
 
-      <!-- f) ARRIVAL -->
+      <!-- f) ARRIVAL: confetti + celebratory reward card -->
       <section class="screen" id="s-arrival">
-        <h2>You've arrived!</h2>
+        <h2 style="text-align:center">You've arrived! &#x1F389;</h2>
         <div class="big" id="arrivePts">+0</div>
         <div class="sub">Pulse Points earned</div>
+        <div class="walletrow">Wallet total: <b id="arriveWallet">0</b> Pulse Points</div>
         <div class="card" id="arriveCard"></div>
+        <div class="ticket" id="arriveTicket" style="display:none"></div>
+        <div class="co2line" id="arriveCo2"></div>
         <button class="btn" onclick="go('plan')">Plan another trip</button>
+        <button class="btn ghost" style="margin-top:8px" onclick="openRewards()">See my rewards</button>
+      </section>
+
+      <!-- g) REWARDS: wallet, perks, lottery, badges, weekly challenge -->
+      <section class="screen" id="s-rewards">
+        <h2>Rewards</h2>
+        <p class="tag">Everything you've earned this session.</p>
+        <div class="wallet-hero">
+          <div class="wallet-hero-pts" id="rwWallet">0</div>
+          <div class="wallet-hero-lbl">Pulse Points</div>
+        </div>
+        <div class="rw-stats">
+          <div class="rw-stat"><b id="rwEntries">0</b><small>Lottery entries</small></div>
+          <div class="rw-stat"><b id="rwTrips">0</b><small>Trips completed</small></div>
+        </div>
+
+        <h3>Weekly challenge</h3>
+        <div class="card challenge">
+          <div class="ch-top"><span>Take 3 off-peak trips
+            <span id="rwChallengeDone" style="display:none">&#x2705;</span></span>
+            <b id="rwChallengeTxt">0/3</b></div>
+          <div class="ch-bar"><div class="ch-fill" id="rwChallengeFill" style="width:0%"></div></div>
+        </div>
+
+        <h3>Badges</h3>
+        <div class="badges" id="rwBadges"></div>
+
+        <h3>Partner perks <span class="illus">illustrative</span></h3>
+        <div id="rwPerks"></div>
+
+        <h3>Prize draw</h3>
+        <div class="card" id="rwLottery"></div>
+
+        <div class="disc">All perks, badges and prize draws here are fictional and
+          illustrative &mdash; session-only, with no real brands, money or prizes.</div>
       </section>
     </div>
+
+    <div id="tabbar">
+      <button class="tabbtn sel" id="tabTrip" onclick="go('plan')">
+        <span class="ti">&#x1F9ED;</span>Trip</button>
+      <button class="tabbtn" id="tabRewards" onclick="openRewards()">
+        <span class="ti">&#x1F381;</span>Rewards</button>
+    </div>
+
+    <div id="confetti"></div>
 
     <div id="footer">Demo &mdash; simulated Berlin, synthetic conditions, illustrative
       rewards. No accounts, no network, no live data.</div>
@@ -1476,16 +1626,28 @@ const state = {
   entry: null,
   pending: 0,
   pendingReward: null,
+  pendingMeta: null,
+  // session-only reward state (resets on reload, exactly right for a demo)
+  entries: 0,            // lottery / prize-draw entries
+  trips: 0,              // completed trips
+  offpeak: 0,            // off-peak trips, for the weekly challenge
+  badges: {first:false, green:false, peak:false},
 };
 
 function $(id){return document.getElementById(id);}
 
-// ---------- screen transitions ----------
+// ---------- screen transitions + tab-bar sync ----------
+function setTab(name){
+  const onRewards = (name === "rewards");
+  $("tabRewards").classList.toggle("sel", onRewards);
+  $("tabTrip").classList.toggle("sel", !onRewards);
+}
 function go(name){
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
   const el = $("s-"+name);
   el.classList.add("active");
   el.scrollTop = 0;
+  setTab(name);
 }
 
 // ---------- status-bar clock ----------
@@ -1524,20 +1686,40 @@ function buildChips(){
   });
 }
 
-// ---------- loading ----------
-const LOAD_LINES = [
-  "Reading the network…",
-  "Checking the morning peak…",
-  "Scoring quieter options…",
-];
+// ---------- loading: "reading the network" with rotating tips/facts/jokes ----
+const LOAD_MS = 3300;          // long enough to read a couple of cards
+let loadCards = [];
+function buildLoadCards(){
+  const out = [];
+  (DATA.tips  || []).forEach(t => out.push({k:"TIP",            cls:"",     t}));
+  (DATA.facts || []).forEach(t => out.push({k:"DID YOU KNOW?",  cls:"fact", t}));
+  (DATA.jokes || []).forEach(t => out.push({k:"JOKE",           cls:"joke", t}));
+  // Fisher-Yates shuffle so the mix feels fresh each load.
+  for(let i=out.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    const tmp = out[i]; out[i] = out[j]; out[j] = tmp;
+  }
+  loadCards = out;
+}
 let loadTimer = null, loadIdx = 0;
+function renderTip(){
+  if(!loadCards.length) return;
+  const card = loadCards[loadIdx % loadCards.length];
+  $("tipLabel").className = "tiplabel " + card.cls;
+  $("tipLabel").textContent = card.k;
+  $("tipText").textContent = card.t;
+}
 function startLoading(){
-  loadIdx = 0; $("loadStatus").textContent = LOAD_LINES[0];
+  if(!loadCards.length) buildLoadCards();
+  loadIdx = 0;
+  $("tipCard").classList.remove("fade");
+  renderTip();
   clearInterval(loadTimer);
   loadTimer = setInterval(()=>{
-    loadIdx = (loadIdx+1) % LOAD_LINES.length;
-    $("loadStatus").textContent = LOAD_LINES[loadIdx];
-  }, 650);
+    const tc = $("tipCard");
+    tc.classList.add("fade");                      // fade out current
+    setTimeout(()=>{ loadIdx++; renderTip(); tc.classList.remove("fade"); }, 300);
+  }, 1500);                                         // rotate every ~1.5s
 }
 function stopLoading(){ clearInterval(loadTimer); }
 
@@ -1550,7 +1732,7 @@ function findRoute(){
   }
   refreshClock();
   go("loading"); startLoading();
-  setTimeout(()=>{ stopLoading(); showVerdict(); }, 1750);
+  setTimeout(()=>{ stopLoading(); showVerdict(); }, LOAD_MS);
 }
 
 // ---------- verdict ----------
@@ -1624,20 +1806,28 @@ function lmByName(n){ return LM.find(l=>l.name===n); }
 
 function choose(which){
   const e = state.entry;
-  let reward, label, curveDir;
+  let reward, label, curveDir, type, offpeak, corridor, co2g;
   if(which==="confirm"){
     reward = {pulse_points:DATA.confirmPoints, green_bonus:0,
       total_points:DATA.confirmPoints, lottery_entry:true,
       partner_value:DATA.confirmPoints + " Pulse Points ≈ EUR " +
         (DATA.confirmPoints/100).toFixed(2) + " partner perk credit (illustrative)."};
     label = "Trip confirmed"; curveDir = 0;
+    type = "CONFIRM"; offpeak = !e.in_peak; corridor = null; co2g = DATA.co2Confirm;
   } else {
     const a = e.alternatives[which];
-    reward = a.reward; label = altLabel(a.type);
+    reward = a.reward; label = altLabel(a.type); type = a.type;
     curveDir = (a.type==="REROUTE") ? 1 : (a.type==="GREEN" ? -1 : 0);
+    // RETIME and GREEN move the rider out of the peak; REROUTE keeps the time.
+    offpeak = (a.type==="RETIME" || a.type==="GREEN");
+    corridor = (e.targeted_corridors && e.targeted_corridors.length)
+      ? e.targeted_corridors.join(" & ")
+      : (e.route_corridors[0] || "the corridor");
+    co2g = Math.round(a.carbon_reduction * DATA.co2Base);
   }
   state.pending = reward.total_points;
   state.pendingReward = reward;
+  state.pendingMeta = {type, offpeak, corridor, co2g};
 
   $("chooseTitle").textContent = label;
   $("chooseSub").innerHTML = "Following your chosen route&hellip;";
@@ -1687,12 +1877,22 @@ function drawAndAnimate(fromName, toName, curveDir, onDone){
 }
 function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 
-// ---------- arrival ----------
+// ---------- arrival: bank the reward, then celebrate ----------
 function showArrival(){
-  const r = state.pendingReward;
+  const r = state.pendingReward, m = state.pendingMeta || {};
   state.wallet += state.pending;
+  state.trips += 1;
+  if(r.lottery_entry) state.entries += 1;
+  if(m.offpeak) state.offpeak += 1;
+  // badges (session-only, illustrative)
+  state.badges.first = true;                              // First Shift: any trip
+  if(m.type === "GREEN") state.badges.green = true;       // Green Streak
+  if(m.type === "RETIME" || (m.offpeak && m.type !== "CONFIRM"))
+    state.badges.peak = true;                             // Peak Breaker
+
   $("walletPts").textContent = state.wallet;
   $("arrivePts").textContent = "+" + state.pending;
+  $("arriveWallet").textContent = state.wallet;
 
   let rows = '<div class="reward-line"><span>Pulse Points</span><b>+' +
     r.pulse_points + '</b></div>';
@@ -1704,13 +1904,98 @@ function showArrival(){
     ' pts</b></div>';
   rows += '<div class="partner">' + r.partner_value + '</div>';
   $("arriveCard").innerHTML = rows;
+
+  // animated lottery ticket
+  const tk = $("arriveTicket");
+  if(r.lottery_entry){
+    tk.style.display = "flex";
+    tk.innerHTML = '<div class="tk-ico">\u{1F39F}️</div><div>' +
+      '<div class="tk-main">Prize-draw entry added</div>' +
+      '<div class="tk-sub">You now hold ' + state.entries + ' entr' +
+      (state.entries===1?"y":"ies") + ' &mdash; illustrative weekly draw</div></div>';
+  } else { tk.style.display = "none"; }
+
+  // illustrative corridor relief + CO2 line
+  const co2 = $("arriveCo2");
+  if(m.corridor){
+    co2.innerHTML = 'Helped relieve <b>' + esc(m.corridor) + '</b><br>~' +
+      m.co2g + ' g CO₂ saved <small>(illustrative)</small>';
+  } else {
+    co2.innerHTML = 'Kept an off-peak trip off-peak<br>~' + m.co2g +
+      ' g CO₂ saved <small>(illustrative)</small>';
+  }
+
   go("arrival");
+  launchConfetti();
+}
+
+// ---------- confetti burst (pure JS, no libraries) ----------
+function launchConfetti(){
+  const host = $("confetti"); if(!host) return;
+  host.innerHTML = "";
+  const colors = [ACCENT,"#27d99a","#ffd166","#7ee0bd","#79c0ff","#ff8fa3"];
+  for(let i=0;i<90;i++){
+    const p = document.createElement("div");
+    p.className = "confetti-pc";
+    p.style.left = (Math.random()*100) + "%";
+    p.style.background = colors[i % colors.length];
+    p.style.width = (6 + Math.random()*5) + "px";
+    p.style.height = (10 + Math.random()*8) + "px";
+    p.style.animationDuration = (1.6 + Math.random()*1.4) + "s";
+    p.style.animationDelay = (Math.random()*0.5) + "s";
+    host.appendChild(p);
+  }
+  setTimeout(()=>{ host.innerHTML = ""; }, 2700);
+}
+
+// ---------- rewards screen ----------
+function openRewards(){ renderRewards(); go("rewards"); }
+
+function renderRewards(){
+  $("rwWallet").textContent = state.wallet;
+  $("rwEntries").textContent = state.entries;
+  $("rwTrips").textContent = state.trips;
+
+  // weekly challenge: take 3 off-peak trips
+  const goal = 3, n = Math.min(state.offpeak, goal);
+  $("rwChallengeTxt").textContent = state.offpeak + "/" + goal;
+  $("rwChallengeFill").style.width = (n/goal*100) + "%";
+  $("rwChallengeDone").style.display = (state.offpeak>=goal) ? "inline" : "none";
+
+  // badges
+  const defs = [
+    {key:"first", ico:"\u{1F687}", label:"First Shift"},
+    {key:"green", ico:"\u{1F331}", label:"Green Streak"},
+    {key:"peak",  ico:"⚡",    label:"Peak Breaker"},
+  ];
+  $("rwBadges").innerHTML = defs.map(d =>
+    '<div class="badge' + (state.badges[d.key] ? " earned" : "") + '">' +
+    '<div class="bi">' + d.ico + '</div><div class="bl">' + d.label + '</div></div>'
+  ).join("");
+
+  // illustrative partner perks
+  $("rwPerks").innerHTML = (DATA.perks || []).map(p => {
+    const ok = state.wallet >= p.cost;
+    const tag = ok
+      ? '<span class="pk-state ok">Redeemable</span>'
+      : '<span class="pk-state locked">' + (p.cost - state.wallet) + ' more</span>';
+    return '<div class="perk"><div><div class="pk-name">' + esc(p.name) + '</div>' +
+      '<div class="pk-cost">' + p.cost + ' pts</div></div>' + tag + '</div>';
+  }).join("");
+
+  // prize draw
+  $("rwLottery").innerHTML = state.entries>0
+    ? '\u{1F39F}️ <b>' + state.entries + '</b> entr' +
+      (state.entries===1?"y":"ies") +
+      ' in this week’s illustrative prize draw. Friday could be your day.'
+    : 'No entries yet &mdash; complete a recommended shift to earn a prize-draw entry.';
 }
 
 // ---------- init ----------
 fillSelect($("fromSel"), state.from);
 fillSelect($("toSel"), state.to);
 buildChips();
+buildLoadCards();
 refreshClock();
 </script>
 """
@@ -1810,12 +2095,52 @@ with tab7:
                     "alternatives": _alts_out,
                 }
 
+    # Loading-screen content (cycled every ~1.5s). All illustrative; FACTS are
+    # rounded, public, non-operational figures used only to set the scene.
+    RIDER_TIPS = [
+        "Off-peak trips earn double Pulse Points.",
+        "Green hour: travel when the grid is cleanest for a bonus.",
+        "Small shifts add up. A 20-minute change can cool a whole corridor.",
+        "Recommended shifts earn a draw entry. Friday could be your day.",
+        "Targeted corridors relieve fast; the whole city moves slowly. "
+        "That's the point.",
+    ]
+    RIDER_FACTS = [
+        "Berlin drivers lose around 60 hours a year to congestion.",
+        "Berlin's grid runs over three-fifths renewable in a typical year.",
+        "Depot charging is the most controllable flexible load in the city.",
+    ]
+    RIDER_JOKES = [
+        "Why did the U-Bahn get promoted? It was always on the right track.",
+        "The bus tried meditation. Now it's much more centred at the stop.",
+        "I told my route to relax. It said it couldn't, too much on its plate.",
+        "Off-peak travel: because being early is the new being on time.",
+    ]
+
+    # Illustrative, fictional partner perks (no real brands, no real redemption).
+    RIDER_PERKS = [
+        {"name": "Example local cafe — free filter coffee", "cost": 100},
+        {"name": "Example bike-share — day pass", "cost": 150},
+        {"name": "Example cinema ticket", "cost": 250},
+    ]
+
+    # Illustrative CO2 conversion for the arrival card: grams "saved" =
+    # carbon_reduction (engine fraction) * RIDER_CO2_BASE_G. NOT a measurement.
+    RIDER_CO2_BASE_G = 1500       # GREEN(0.30)->450g, RETIME(0.08)->120g, etc.
+    RIDER_CO2_CONFIRM_G = 60      # token figure for confirming an off-peak trip
+
     _rider_payload = {
         "accent": "#1d9e75",
         "landmarks": _landmarks_payload,
         "chips": RIDER_CHIPS,
         "dataset": _rider_dataset,
         "confirmPoints": RIDER_CONFIRM_POINTS,
+        "tips": RIDER_TIPS,
+        "facts": RIDER_FACTS,
+        "jokes": RIDER_JOKES,
+        "perks": RIDER_PERKS,
+        "co2Base": RIDER_CO2_BASE_G,
+        "co2Confirm": RIDER_CO2_CONFIRM_G,
     }
 
     # ---- STEP 3: the self-contained phone component -----------------------------
@@ -1827,4 +2152,127 @@ with tab7:
         "Pulse Points live only in the demo's memory and reset when you reload — "
         "exactly right for a prototype. The trip outcomes and rewards shown here "
         "are the same numbers `rider_engine.py` produces and `test_rider.py` locks."
+    )
+
+    # ---- STEP 4: THE REVEAL -- "What if everyone shifted?" -----------------------
+    # Zoom out from one rider to the whole city. The compliance slider (share of
+    # riders who accept a recommended shift) maps to the scenario engine's
+    # active_share; rider_engine.aggregate_effect rolls it up into the SAME
+    # network/corridor figures the Scenario Explorer reports (registered share and
+    # peak-shift stay at the Section 6 MEDIUM operating point, the aggregate_effect
+    # defaults). We reuse the Tab 6 corridor geometry + redirection split so the
+    # map recolours at the SAME operating point: targeted corridors visibly relieve
+    # while the network barely moves -- the paper's core point.
+    import pydeck as _pdk
+    from prototype_engine import simulate_redirection as _simulate_redirection
+
+    st.divider()
+    st.header("What if everyone shifted?")
+    st.caption(
+        "The phone shows one rider. Drag the slider to roll many riders up into the "
+        "validated Section 6 model and watch *where* the relief lands."
+    )
+
+    reveal_compliance_pct = st.slider(
+        "Share of riders who accept a recommended shift (%)",
+        0.0, 100.0, 45.0, step=1.0, key="reveal_compliance",
+        help="Maps to the scenario engine's active_share. Registered share (20%) "
+             "and peak-shift (7.5%) stay at the Section 6 MEDIUM operating point, "
+             "exactly as rider_engine.aggregate_effect defaults.")
+    reveal_compliance = reveal_compliance_pct / 100.0
+
+    # Headline figures: rolled up by rider_engine.aggregate_effect -- reported
+    # VERBATIM from scenario_engine.compute_scenario, so they match the Scenario
+    # Explorer tab exactly at registered 20% / active <slider> / peak-shift 7.5%.
+    reveal_agg = rider_engine.aggregate_effect(reveal_compliance)
+
+    # Spatial split over the SAME Tab 6 corridors at the SAME operating point, so
+    # the per-corridor colours reconcile with the headline above (both wrap
+    # compute_scenario with identical inputs).
+    reveal_sim = _simulate_redirection(
+        registered_share=reveal_agg["registered_share"],
+        active_share=reveal_compliance,
+        peak_shift_share=reveal_agg["peak_shift_share"],
+        corridor_share=reveal_agg["corridor_share"],
+    )
+
+    # Colour each corridor by its AFTER load on a fixed BEFORE scale (Tab 6 rule):
+    # high load -> red, relieved -> green. Targeted arterials slide toward green;
+    # the rest barely move.
+    _reveal_max = max((c["before_peak"] for c in reveal_sim["per_corridor"]),
+                      default=1.0) or 1.0
+
+    def _reveal_color(load):
+        t = min(max(load / _reveal_max, 0.0), 1.0)
+        return [int(220 * t + 30), int(200 * (1.0 - t) + 30), 45]
+
+    def _reveal_lines(coords):
+        if not coords:
+            return []
+        first = coords[0]
+        if (isinstance(first, (list, tuple)) and len(first) == 2
+                and all(isinstance(v, (int, float)) for v in first)):
+            return [coords]
+        out = []
+        for sub in coords:
+            out.extend(_reveal_lines(sub))
+        return out
+
+    reveal_rows = []
+    for c in reveal_sim["per_corridor"]:
+        color = _reveal_color(c["after_peak"])
+        for line in _reveal_lines(c["coords"]):
+            reveal_rows.append({
+                "name": c["name"],
+                "path": [[float(x), float(y)] for x, y in line],
+                "color": color,
+                "before_peak": int(round(c["before_peak"])),
+                "after_peak": int(round(c["after_peak"])),
+                "relief_pct": round(c["relief_pct"], 1),
+                "targeted": "targeted" if c["targeted"] else "non-targeted",
+            })
+
+    reveal_deck = _pdk.Deck(
+        layers=[_pdk.Layer(
+            "PathLayer", data=reveal_rows, get_path="path",
+            get_color="color", get_width=30,
+            width_min_pixels=3, width_max_pixels=9,
+            pickable=True, auto_highlight=True,
+        )],
+        initial_view_state=_pdk.ViewState(
+            latitude=52.52, longitude=13.405, zoom=11, pitch=0),
+        map_provider="carto", map_style="road",
+        tooltip={
+            "html": "<b>{name}</b> ({targeted})<br/>"
+                    "Before peak: {before_peak}<br/>After peak: {after_peak}<br/>"
+                    "Relief: {relief_pct}%",
+            "style": {"backgroundColor": "rgba(20,20,30,0.9)", "color": "white"},
+        },
+    )
+    st.pydeck_chart(reveal_deck, use_container_width=True)
+
+    rv1, rv2 = st.columns(2)
+    rv1.metric("Network-wide peak reduction",
+               f"{reveal_agg['network_peak_reduction_pct']:.2f} %")
+    reveal_capped = (reveal_agg["corridor_relief_display_pct"]
+                     < reveal_agg["corridor_relief_pct"])
+    rv2.metric(
+        "Corridor relief",
+        f"{reveal_agg['corridor_relief_display_pct']:.2f} %",
+        help=(f"Raw arithmetic value is {reveal_agg['corridor_relief_pct']:.2f} %; "
+              f"capped to the paper's {SCENARIO_BAND[0]:.0f}–{SCENARIO_BAND[1]:.0f}% "
+              "reported band for display, exactly as the Scenario Explorer tab does."
+              if reveal_capped else None))
+
+    st.caption(
+        "This reuses the validated Section 6 model. Corridor effect is real; "
+        "network effect is small."
+    )
+    st.caption(
+        "Red = high peak load, green = relieved. Geometry is the real Berlin "
+        "arterial network (the same corridors as the Network Prototype tab); the "
+        "peak loads are synthetic. The headline figures come straight from "
+        "`rider_engine.aggregate_effect`, which reports the Scenario Explorer's "
+        "numbers verbatim — set that tab to registered 20%, active "
+        f"{reveal_compliance_pct:.0f}%, peak-shift 7.5% to read the identical values."
     )
