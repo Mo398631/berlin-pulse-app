@@ -19,9 +19,10 @@ st.warning(
     "   or computed from public SMARD data, as described in the paper."
 )
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "Depot Optimizer", "Scenario Explorer", "Deployability Gap",
     "Robustness (Monte Carlo)", "Unified Model", "Network Prototype",
+    "Berlin Pulse Rider",
 ])
 
 with tab1:
@@ -1274,4 +1275,556 @@ with tab6:
         "These aggregate figures match the Scenario Explorer tab because they use "
         "the same validated Section 6 model; the map only distributes the effect "
         "spatially over illustrative demand."
+    )
+
+# --- Tab 7 phone component: one self-contained HTML/CSS/JS document. All state
+#     and tap-to-tap navigation live in the browser; Python only injects the
+#     precomputed rider_engine outcomes at "__RIDER_DATA__". No f-string here so
+#     the CSS/JS braces stay literal. ---------------------------------------------
+_RIDER_COMPONENT_TEMPLATE = r"""
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  :root{
+    --accent:#1d9e75; --accent-soft:rgba(29,158,117,.16);
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232c; --line:#2a323d;
+    --text:#e6edf3; --muted:#8b949e; --warn:#e3a008; --red:#e5534b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:transparent;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  #stage{display:flex;justify-content:center;padding:14px 8px 22px;}
+  #phone{
+    position:relative;width:360px;height:740px;background:var(--bg);
+    border-radius:38px;border:1px solid var(--line);
+    box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 8px #05070a;
+    color:var(--text);overflow:hidden;display:flex;flex-direction:column;
+  }
+  #notch{position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:140px;height:24px;background:#05070a;border-radius:0 0 16px 16px;z-index:5;}
+  #statusbar{display:flex;justify-content:space-between;align-items:center;
+    padding:34px 18px 8px;font-size:12.5px;color:var(--muted);}
+  #clock{font-weight:600;color:var(--text);letter-spacing:.3px;}
+  #wallet{display:flex;align-items:center;gap:5px;background:var(--accent-soft);
+    color:var(--accent);padding:4px 9px;border-radius:999px;font-weight:600;
+    border:1px solid rgba(29,158,117,.35);}
+  #wallet .hex{font-size:12px;}
+  #screens{position:relative;flex:1;overflow:hidden;}
+  .screen{position:absolute;inset:0;padding:6px 20px 12px;overflow-y:auto;
+    opacity:0;transform:translateX(14px);pointer-events:none;
+    transition:opacity .32s ease,transform .32s ease;}
+  .screen.active{opacity:1;transform:none;pointer-events:auto;}
+  .screen::-webkit-scrollbar{width:0;}
+  #footer{padding:8px 16px 12px;font-size:10px;line-height:1.35;color:var(--muted);
+    text-align:center;border-top:1px solid var(--line);background:rgba(0,0,0,.18);}
+  h2{font-size:21px;margin:6px 0 4px;letter-spacing:.2px;}
+  h3{font-size:15px;margin:14px 0 8px;color:var(--text);}
+  p.tag{color:var(--muted);font-size:13.5px;line-height:1.45;margin:2px 0 14px;}
+  .btn{display:block;width:100%;border:0;cursor:pointer;border-radius:14px;
+    padding:14px;font-size:15px;font-weight:650;color:#04130d;
+    background:var(--accent);transition:transform .08s ease,filter .15s ease;}
+  .btn:hover{filter:brightness(1.07);} .btn:active{transform:scale(.985);}
+  .btn.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line);}
+  label.fld{display:block;font-size:12px;color:var(--muted);margin:12px 0 5px;
+    text-transform:uppercase;letter-spacing:.6px;}
+  select{width:100%;padding:13px 12px;border-radius:12px;background:var(--panel);
+    color:var(--text);border:1px solid var(--line);font-size:14.5px;appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),
+      linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+    background-position:calc(100% - 18px) 19px,calc(100% - 13px) 19px;
+    background-size:5px 5px,5px 5px;background-repeat:no-repeat;}
+  .chips{display:flex;gap:8px;}
+  .chip{flex:1;text-align:center;padding:11px 6px;border-radius:12px;cursor:pointer;
+    background:var(--panel);border:1px solid var(--line);font-size:13px;color:var(--text);
+    transition:.15s;}
+  .chip small{display:block;color:var(--muted);font-size:10.5px;margin-top:2px;}
+  .chip.sel{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
+  .chip.sel small{color:var(--accent);}
+  .brand{display:flex;flex-direction:column;align-items:center;text-align:center;
+    margin-top:54px;}
+  .mark{width:96px;height:96px;border-radius:50%;display:grid;place-items:center;
+    background:radial-gradient(circle at 50% 40%,rgba(29,158,117,.32),transparent 70%);
+    margin-bottom:14px;}
+  .mark .core{width:30px;height:30px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 0 8px rgba(29,158,117,.25),0 0 0 18px rgba(29,158,117,.12);
+    animation:beat 1.8s ease-in-out infinite;}
+  @keyframes beat{0%,100%{transform:scale(.92);}50%{transform:scale(1.12);}}
+  .disc{margin-top:18px;font-size:11px;color:var(--muted);line-height:1.4;
+    background:var(--panel);border:1px dashed var(--line);border-radius:10px;padding:10px 12px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:14px;margin:10px 0;}
+  .banner{border-radius:14px;padding:13px 14px;margin:8px 0 4px;font-size:13.5px;
+    line-height:1.45;}
+  .banner.red{background:rgba(229,83,75,.12);border:1px solid rgba(229,83,75,.5);color:#ffb4ae;}
+  .banner.ok{background:var(--accent-soft);border:1px solid rgba(29,158,117,.5);color:#7ee0bd;}
+  .route{font-size:13px;color:var(--muted);margin:2px 0 0;}
+  .route b{color:var(--text);}
+  .opt{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:13px;margin:10px 0;cursor:pointer;transition:.15s;}
+  .opt:hover{border-color:var(--accent);background:var(--panel2);}
+  .opt:active{transform:scale(.99);}
+  .opt .top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .opt .ty{font-weight:700;font-size:14px;}
+  .opt .pts{color:var(--accent);font-weight:700;font-size:14px;white-space:nowrap;}
+  .opt .desc{font-size:12.5px;color:var(--muted);margin:6px 0 8px;line-height:1.4;}
+  .tagrow{display:flex;flex-wrap:wrap;gap:6px;}
+  .pill{font-size:11px;padding:3px 8px;border-radius:999px;background:var(--panel2);
+    border:1px solid var(--line);color:var(--text);}
+  .pill.green{color:var(--accent);border-color:rgba(29,158,117,.4);background:var(--accent-soft);}
+  .loadwrap{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    height:100%;text-align:center;}
+  .pulse{width:70px;height:70px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 0 0 rgba(29,158,117,.55);animation:ring 1.4s ease-out infinite;}
+  @keyframes ring{0%{transform:scale(.7);box-shadow:0 0 0 0 rgba(29,158,117,.55);}
+    70%{transform:scale(1);box-shadow:0 0 0 30px rgba(29,158,117,0);}
+    100%{transform:scale(.7);box-shadow:0 0 0 0 rgba(29,158,117,0);}}
+  .status{margin-top:26px;color:var(--muted);font-size:13.5px;min-height:18px;}
+  svg.map{width:100%;height:200px;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;display:block;}
+  .big{font-size:26px;font-weight:750;text-align:center;margin:18px 0 2px;}
+  .sub{text-align:center;color:var(--muted);font-size:13px;margin-bottom:6px;}
+  .reward-line{display:flex;justify-content:space-between;padding:8px 0;
+    border-bottom:1px solid var(--line);font-size:13.5px;}
+  .reward-line:last-child{border-bottom:0;}
+  .reward-line b{color:var(--accent);}
+  .partner{font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.4;}
+</style>
+
+<div id="stage">
+  <div id="phone">
+    <div id="notch"></div>
+    <div id="statusbar">
+      <span id="clock">08:15</span>
+      <span id="wallet"><span class="hex">&#x2B22;</span> <b id="walletPts">0</b> Pulse Points</span>
+    </div>
+
+    <div id="screens">
+      <!-- a) WELCOME -->
+      <section class="screen active" id="s-welcome">
+        <div class="brand">
+          <div class="mark"><div class="core"></div></div>
+          <h2>Berlin Pulse Rider</h2>
+          <p class="tag">Shift your trip, ease the peak,<br>earn Pulse Points.</p>
+          <button class="btn" onclick="go('plan')">Start</button>
+          <div class="disc">Demo &mdash; simulated Berlin, synthetic conditions,
+            illustrative rewards.</div>
+        </div>
+      </section>
+
+      <!-- b) PLAN -->
+      <section class="screen" id="s-plan">
+        <h2>Plan your trip</h2>
+        <p class="tag">Pick where you're going and when you'd leave.</p>
+        <label class="fld">From</label>
+        <select id="fromSel" onchange="onFromChange()"></select>
+        <label class="fld">To</label>
+        <select id="toSel"></select>
+        <label class="fld">When are you leaving?</label>
+        <div class="chips" id="chipRow"></div>
+        <div style="height:18px"></div>
+        <button class="btn" onclick="findRoute()">Find my route</button>
+      </section>
+
+      <!-- c) LOADING -->
+      <section class="screen" id="s-loading">
+        <div class="loadwrap">
+          <div class="pulse"></div>
+          <div class="status" id="loadStatus">Reading the network&hellip;</div>
+        </div>
+      </section>
+
+      <!-- d) VERDICT -->
+      <section class="screen" id="s-verdict">
+        <h2 id="verdictTitle">Your route</h2>
+        <div id="verdictBody"></div>
+        <button class="btn ghost" style="margin-top:10px" onclick="go('plan')">Change trip</button>
+      </section>
+
+      <!-- e) CHOOSE / animate -->
+      <section class="screen" id="s-choose">
+        <h2 id="chooseTitle">On your way</h2>
+        <p class="tag" id="chooseSub">Following your chosen route&hellip;</p>
+        <svg class="map" id="map" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid meet"></svg>
+      </section>
+
+      <!-- f) ARRIVAL -->
+      <section class="screen" id="s-arrival">
+        <h2>You've arrived!</h2>
+        <div class="big" id="arrivePts">+0</div>
+        <div class="sub">Pulse Points earned</div>
+        <div class="card" id="arriveCard"></div>
+        <button class="btn" onclick="go('plan')">Plan another trip</button>
+      </section>
+    </div>
+
+    <div id="footer">Demo &mdash; simulated Berlin, synthetic conditions, illustrative
+      rewards. No accounts, no network, no live data.</div>
+  </div>
+</div>
+
+<script>
+const DATA = __RIDER_DATA__;
+const LM = DATA.landmarks;
+const CHIPS = DATA.chips;
+const ACCENT = DATA.accent;
+
+const state = {
+  from: LM[0].name,
+  to: LM[3] ? LM[3].name : LM[1].name,
+  chip: "now",
+  wallet: 0,
+  entry: null,
+  pending: 0,
+  pendingReward: null,
+};
+
+function $(id){return document.getElementById(id);}
+
+// ---------- screen transitions ----------
+function go(name){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  const el = $("s-"+name);
+  el.classList.add("active");
+  el.scrollTop = 0;
+}
+
+// ---------- status-bar clock ----------
+function chipByID(id){return CHIPS.find(c=>c.id===id) || CHIPS[0];}
+function refreshClock(){ $("clock").textContent = chipByID(state.chip).hhmm; }
+
+// ---------- plan screen wiring ----------
+function fillSelect(sel, selected){
+  sel.innerHTML = "";
+  LM.forEach(lm=>{
+    const o = document.createElement("option");
+    o.value = lm.name; o.textContent = lm.name;
+    if(lm.name===selected) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+function onFromChange(){
+  state.from = $("fromSel").value;
+  // never let From == To
+  if(state.to === state.from){
+    const alt = LM.find(l=>l.name!==state.from);
+    state.to = alt.name;
+    fillSelect($("toSel"), state.to);
+  }
+}
+function buildChips(){
+  const row = $("chipRow"); row.innerHTML = "";
+  CHIPS.forEach(c=>{
+    const d = document.createElement("div");
+    d.className = "chip" + (c.id===state.chip ? " sel":"");
+    d.innerHTML = c.label + "<small>"+c.hhmm+"</small>";
+    d.onclick = ()=>{ state.chip = c.id;
+      row.querySelectorAll(".chip").forEach(x=>x.classList.remove("sel"));
+      d.classList.add("sel"); refreshClock(); };
+    row.appendChild(d);
+  });
+}
+
+// ---------- loading ----------
+const LOAD_LINES = [
+  "Reading the network…",
+  "Checking the morning peak…",
+  "Scoring quieter options…",
+];
+let loadTimer = null, loadIdx = 0;
+function startLoading(){
+  loadIdx = 0; $("loadStatus").textContent = LOAD_LINES[0];
+  clearInterval(loadTimer);
+  loadTimer = setInterval(()=>{
+    loadIdx = (loadIdx+1) % LOAD_LINES.length;
+    $("loadStatus").textContent = LOAD_LINES[loadIdx];
+  }, 650);
+}
+function stopLoading(){ clearInterval(loadTimer); }
+
+function findRoute(){
+  state.from = $("fromSel").value;
+  state.to = $("toSel").value;
+  if(state.from === state.to){
+    const alt = LM.find(l=>l.name!==state.from);
+    state.to = alt.name; fillSelect($("toSel"), state.to);
+  }
+  refreshClock();
+  go("loading"); startLoading();
+  setTimeout(()=>{ stopLoading(); showVerdict(); }, 1750);
+}
+
+// ---------- verdict ----------
+function pct(x){ return Math.round(x*100) + "%"; }
+
+function showVerdict(){
+  const key = state.from + "||" + state.to + "||" + state.chip;
+  const e = DATA.dataset[key];
+  state.entry = e;
+  const route = e.route_corridors.join(" → ");
+  let html = '<p class="route">' + e.from + " &rarr; " + e.to +
+             " &middot; leaving <b>" + e.depart_hhmm + "</b></p>" +
+             '<p class="route">via <b>' + route + "</b></p>";
+
+  if(e.red_zone){
+    $("verdictTitle").textContent = "Busy corridor in the peak";
+    html += '<div class="banner red">Heads up: this trip rides a targeted ' +
+      'corridor during the morning peak. Here are three nudges &mdash; each ' +
+      'earns a reward.</div>';
+    html += '<div class="card"><div class="opt-ty" style="font-weight:700">' +
+      'Baseline (no change)</div><div class="desc" style="font-size:12.5px;color:var(--muted)">' +
+      'Ride as planned at ' + e.depart_hhmm + ' on the busy corridor &mdash; no reward.</div></div>';
+    html += "<h3>Pick a nudge</h3>";
+    e.alternatives.forEach((a,i)=>{
+      const r = a.reward;
+      let pills = '<span class="pill green">⭐ ' + r.pulse_points + ' pts</span>';
+      if(r.green_bonus>0) pills += '<span class="pill green">\u{1F331} +' + r.green_bonus + ' green</span>';
+      if(r.lottery_entry) pills += '<span class="pill">\u{1F39F} lottery entry</span>';
+      const benefit = "≈" + pct(a.crowding_reduction) + " less peak crowding &middot; ≈"
+        + pct(a.carbon_reduction) + " lower carbon";
+      html += '<div class="opt" onclick="choose(' + i + ')">' +
+        '<div class="top"><span class="ty">' + altLabel(a.type) +
+        '</span><span class="pts">+' + r.total_points + ' pts</span></div>' +
+        '<div class="desc">' + a.description + '<br>' + benefit + '</div>' +
+        '<div class="tagrow">' + pills + '</div></div>';
+    });
+  } else {
+    $("verdictTitle").textContent = "You're already in the clear";
+    const why = e.in_peak
+      ? "Your route avoids the targeted corridors, so you're clear of the busy arterials."
+      : "You're travelling off-peak, so the network's already quiet.";
+    html += '<div class="banner ok">' + why +
+      ' Confirm your trip and we&rsquo;ll still thank you with a small reward.</div>';
+    html += '<div class="opt" onclick="choose(\'confirm\')">' +
+      '<div class="top"><span class="ty">Confirm this trip</span>' +
+      '<span class="pts">+' + DATA.confirmPoints + ' pts</span></div>' +
+      '<div class="desc">No change needed &mdash; tap to confirm your low-impact trip.</div>' +
+      '<div class="tagrow"><span class="pill green">⭐ ' + DATA.confirmPoints +
+      ' pts</span><span class="pill">\u{1F39F} lottery entry</span></div></div>';
+  }
+  $("verdictBody").innerHTML = html;
+  go("verdict");
+}
+
+function altLabel(t){
+  return ({RETIME:"Leave earlier", REROUTE:"Take a quieter route",
+           GREEN:"Travel in the green hour"})[t] || t;
+}
+
+// ---------- choose + map animation ----------
+function project(lon, lat){
+  let mnx=180, mxx=-180, mny=90, mxy=-90;
+  LM.forEach(l=>{ mnx=Math.min(mnx,l.lon); mxx=Math.max(mxx,l.lon);
+                  mny=Math.min(mny,l.lat); mxy=Math.max(mxy,l.lat); });
+  const pad=28, W=300, H=200;
+  const x = pad + (lon-mnx)/((mxx-mnx)||1)*(W-2*pad);
+  const y = pad + (mxy-lat)/((mxy-mny)||1)*(H-2*pad); // flip lat
+  return {x, y};
+}
+function lmByName(n){ return LM.find(l=>l.name===n); }
+
+function choose(which){
+  const e = state.entry;
+  let reward, label, curveDir;
+  if(which==="confirm"){
+    reward = {pulse_points:DATA.confirmPoints, green_bonus:0,
+      total_points:DATA.confirmPoints, lottery_entry:true,
+      partner_value:DATA.confirmPoints + " Pulse Points ≈ EUR " +
+        (DATA.confirmPoints/100).toFixed(2) + " partner perk credit (illustrative)."};
+    label = "Trip confirmed"; curveDir = 0;
+  } else {
+    const a = e.alternatives[which];
+    reward = a.reward; label = altLabel(a.type);
+    curveDir = (a.type==="REROUTE") ? 1 : (a.type==="GREEN" ? -1 : 0);
+  }
+  state.pending = reward.total_points;
+  state.pendingReward = reward;
+
+  $("chooseTitle").textContent = label;
+  $("chooseSub").innerHTML = "Following your chosen route&hellip;";
+  drawAndAnimate(e.from, e.to, curveDir, ()=> showArrival());
+  go("choose");
+}
+
+function drawAndAnimate(fromName, toName, curveDir, onDone){
+  const svg = $("map");
+  const o = project(lmByName(fromName).lon, lmByName(fromName).lat);
+  const d = project(lmByName(toName).lon, lmByName(toName).lat);
+  // control point: midpoint pushed perpendicular for reroute/green curves
+  const mx=(o.x+d.x)/2, my=(o.y+d.y)/2;
+  const dx=d.x-o.x, dy=d.y-o.y, len=Math.hypot(dx,dy)||1;
+  const off = curveDir*42;
+  const cx = mx + (-dy/len)*off, cy = my + (dx/len)*off;
+
+  // faint context dots for all landmarks
+  let ctx = "";
+  LM.forEach(l=>{ const p=project(l.lon,l.lat);
+    ctx += '<circle cx="'+p.x+'" cy="'+p.y+'" r="2.4" fill="#2f3a45"/>'; });
+
+  const pathD = "M "+o.x+" "+o.y+" Q "+cx+" "+cy+" "+d.x+" "+d.y;
+  svg.innerHTML = ctx +
+    '<path d="'+pathD+'" fill="none" stroke="'+ACCENT+'" stroke-width="3" ' +
+      'stroke-dasharray="5 5" opacity="0.55"/>' +
+    '<circle cx="'+o.x+'" cy="'+o.y+'" r="6" fill="#fff"/>' +
+    '<circle cx="'+d.x+'" cy="'+d.y+'" r="6" fill="'+ACCENT+'"/>' +
+    '<text x="'+o.x+'" y="'+(o.y-10)+'" fill="#e6edf3" font-size="9" ' +
+      'text-anchor="middle">'+esc(fromName)+'</text>' +
+    '<text x="'+d.x+'" y="'+(d.y+18)+'" fill="'+ACCENT+'" font-size="9" ' +
+      'text-anchor="middle">'+esc(toName)+'</text>' +
+    '<circle id="dot" r="6.5" fill="'+ACCENT+'" stroke="#fff" stroke-width="2"/>';
+
+  const dot = $("dot");
+  function bez(t){ const u=1-t;
+    return { x:u*u*o.x + 2*u*t*cx + t*t*d.x, y:u*u*o.y + 2*u*t*cy + t*t*d.y }; }
+  const DUR = 1700; let start=null, done=false;
+  function step(ts){
+    if(start===null) start=ts;
+    let t = Math.min((ts-start)/DUR, 1);
+    const p = bez(t); dot.setAttribute("cx", p.x); dot.setAttribute("cy", p.y);
+    if(t<1){ requestAnimationFrame(step); }
+    else if(!done){ done=true; setTimeout(onDone, 380); }
+  }
+  requestAnimationFrame(step);
+}
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+// ---------- arrival ----------
+function showArrival(){
+  const r = state.pendingReward;
+  state.wallet += state.pending;
+  $("walletPts").textContent = state.wallet;
+  $("arrivePts").textContent = "+" + state.pending;
+
+  let rows = '<div class="reward-line"><span>Pulse Points</span><b>+' +
+    r.pulse_points + '</b></div>';
+  if(r.green_bonus>0) rows += '<div class="reward-line"><span>Green-hour bonus</span><b>+' +
+    r.green_bonus + '</b></div>';
+  rows += '<div class="reward-line"><span>Prize-draw entry</span><b>' +
+    (r.lottery_entry ? "Yes \u{1F39F}" : "No") + '</b></div>';
+  rows += '<div class="reward-line"><span>Total</span><b>+' + r.total_points +
+    ' pts</b></div>';
+  rows += '<div class="partner">' + r.partner_value + '</div>';
+  $("arriveCard").innerHTML = rows;
+  go("arrival");
+}
+
+// ---------- init ----------
+fillSelect($("fromSel"), state.from);
+fillSelect($("toSel"), state.to);
+buildChips();
+refreshClock();
+</script>
+"""
+
+
+with tab7:
+    import json as _json
+    import streamlit.components.v1 as _components
+
+    import rider_engine
+
+    st.title("Berlin Pulse Rider")
+    st.caption(
+        "A phone-style demo of the Section 5.3 five-step incentive logic from one "
+        "rider's point of view: plan a morning trip, see if it lands on a busy "
+        "targeted corridor in the peak, pick a nudge, and bank the reward. Every "
+        "tap happens inside the demo — nothing is sent anywhere."
+    )
+    st.warning(
+        "Demo only. Berlin is simulated, conditions are synthetic, and all rewards "
+        "are illustrative figures from the paper's equations — not measured "
+        "ridership, emissions, or real loyalty points. No network calls, no "
+        "accounts, no language model."
+    )
+
+    # ---- STEP 2: precompute every trip outcome from rider_engine ----------------
+    # For every ordered landmark pair and three representative departure chips we
+    # call the pure engine (plan_trip -> generate_alternatives -> compute_reward)
+    # and freeze the whole outcome into a JSON blob. The component never calls
+    # back to Python: it just looks the answer up by "FROM||TO||CHIP".
+    _corridor_index = rider_engine._load_corridor_index()
+
+    # Three representative departure times. "Now / peak" sits inside the simulated
+    # 07:30-09:00 morning peak (so a targeted route becomes a red zone); the other
+    # two are off-peak, where the engine yields no nudge and we instead reward the
+    # rider for confirming an already-quiet trip.
+    RIDER_CHIPS = [
+        {"id": "now",     "label": "Now / peak", "minute": 8 * 60 + 15},
+        {"id": "earlier", "label": "Earlier",    "minute": 7 * 60},
+        {"id": "later",   "label": "Later",      "minute": 10 * 60},
+    ]
+    for _c in RIDER_CHIPS:
+        _c["hhmm"] = rider_engine._minute_to_hhmm(_c["minute"])
+
+    # A small fixed reward for confirming an already-off-peak / off-corridor trip
+    # (the engine offers no behavioural nudge there, but we still thank the rider).
+    RIDER_CONFIRM_POINTS = 20
+
+    _landmarks_payload = [
+        {
+            "name": lm["name"],
+            "lon": lm["lon"],
+            "lat": lm["lat"],
+            "corridor": lm["corridor"],
+            "targeted": bool(_corridor_index.get(lm["corridor"], {}).get("targeted", False)),
+        }
+        for lm in rider_engine.LANDMARKS
+    ]
+    _names = [lm["name"] for lm in rider_engine.LANDMARKS]
+
+    _rider_dataset = {}
+    for _o in _names:
+        for _d in _names:
+            if _o == _d:
+                continue
+            for _chip in RIDER_CHIPS:
+                _trip = rider_engine.plan_trip(_o, _d, _chip["minute"])
+                _alts_out = []
+                for _alt in rider_engine.generate_alternatives(_trip):
+                    _rw = rider_engine.compute_reward(_alt)
+                    _alts_out.append({
+                        "type": _alt["type"],
+                        "description": _alt["description"],
+                        "new_depart_hhmm": _alt["new_depart_hhmm"],
+                        "route_corridors": _alt["route_corridors"],
+                        "crowding_reduction": _alt["crowding_reduction"],
+                        "carbon_reduction": _alt["carbon_reduction"],
+                        "reward": {
+                            "pulse_points": _rw["pulse_points"],
+                            "green_bonus": _rw["green_bonus"],
+                            "total_points": _rw["total_points"],
+                            "lottery_entry": _rw["lottery_entry"],
+                            "partner_value": _rw["partner_value"],
+                        },
+                    })
+                _rider_dataset["%s||%s||%s" % (_o, _d, _chip["id"])] = {
+                    "from": _o,
+                    "to": _d,
+                    "chip": _chip["id"],
+                    "depart_hhmm": _trip["depart_hhmm"],
+                    "in_peak": _trip["in_peak"],
+                    "uses_targeted": _trip["uses_targeted"],
+                    "red_zone": _trip["red_zone"],
+                    "route_corridors": _trip["route_corridors"],
+                    "targeted_corridors": _trip["targeted_corridors"],
+                    "targeted_intensity": _trip["targeted_intensity"],
+                    "alternatives": _alts_out,
+                }
+
+    _rider_payload = {
+        "accent": "#1d9e75",
+        "landmarks": _landmarks_payload,
+        "chips": RIDER_CHIPS,
+        "dataset": _rider_dataset,
+        "confirmPoints": RIDER_CONFIRM_POINTS,
+    }
+
+    # ---- STEP 3: the self-contained phone component -----------------------------
+    _rider_html = _RIDER_COMPONENT_TEMPLATE.replace(
+        "__RIDER_DATA__", _json.dumps(_rider_payload))
+    _components.html(_rider_html, height=820, scrolling=False)
+
+    st.caption(
+        "Pulse Points live only in the demo's memory and reset when you reload — "
+        "exactly right for a prototype. The trip outcomes and rewards shown here "
+        "are the same numbers `rider_engine.py` produces and `test_rider.py` locks."
     )
