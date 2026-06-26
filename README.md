@@ -7,7 +7,7 @@ A Streamlit web app accompanying the research paper:
 
 The app simulates carbon-optimal overnight charging for Berlin's electric bus
 fleet using real SMARD grid data (2025), and exposes the paper's analysis
-through seven interactive tabs.
+through eight interactive tabs.
 
 All figures are illustrative simulations with synthetic demand — no operational
 system exists.
@@ -37,6 +37,9 @@ system exists.
    synthetic data, earns illustrative rewards, and pulls a compliance slider to
    see the paper's real finding: big corridor relief, tiny network effect. No
    backend, no language model, session-only.
+8. **Cross-Grid Comparison** — Runs the same validated optimizer across five
+   real European grids (ENTSO-E 2025 data) with Germany as the locked anchor,
+   showing where the Berlin result holds and where it breaks.
 
 ## Quick start
 
@@ -58,6 +61,7 @@ The test suite covers the simulation engines behind each tab:
 - `test_unified.py` — Unified Model welfare/optimization
 - `test_prototype.py` — Network Prototype redirection + reconciliation
 - `test_rider.py` — Berlin Pulse Rider engine + reward logic + reconciliation
+- `test_crossgrid.py` — Cross-Grid Comparison engine + Germany anchor
 
 Run them all with:
 
@@ -69,6 +73,9 @@ python -m pytest
 
 Street data © OpenStreetMap contributors (ODbL); transit data © VBB
 Verkehrsverbund Berlin-Brandenburg GmbH (CC BY).
+
+Cross-grid generation and price data: ENTSO-E Transparency Platform (2025).
+Germany uses the validated SMARD 2025 dataset.
 
 ## License
 
