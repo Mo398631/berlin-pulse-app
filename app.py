@@ -38,7 +38,71 @@ overview_tab, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
 
 with overview_tab:
     st.title("Overview")
-    st.write("Overview content coming soon.")
+    st.write(
+        'Berlin Pulse is the interactive companion to the research paper "Berlin '
+        'Pulse: A Case Study of AI, Urban Mobility, and Energy-Aware Transport '
+        'Policy." Every result here can be explored and checked. Real computed '
+        "results and illustrative simulations are labelled throughout."
+    )
+
+    # One card per content tab: name (bold) + one-line description.
+    overview_cards = [
+        ("Depot Optimizer",
+         "The core result: naive vs carbon-optimal overnight charging for "
+         "Berlin's 277-bus fleet, on real SMARD 2025 grid data."),
+        ("Scenario Explorer",
+         "Interactive congestion-incentive scenarios from Section 6 "
+         "(illustrative what-if figures)."),
+        ("Deployability Gap",
+         "The honest gap between perfect-foresight and a deployable rule, for "
+         "carbon and cost (Appendix B)."),
+        ("Robustness (Monte Carlo)",
+         "A 10,000-draw stress test of the carbon result under emission-factor "
+         "uncertainty (Appendix D)."),
+        ("Unified Model",
+         "The welfare model: participation vs welfare, and channel "
+         "separability (Appendix A)."),
+        ("Network Prototype",
+         "The redirection mechanism on the real Berlin street and bus network, "
+         "with illustrative demand (simulation)."),
+        ("Berlin Pulse Rider",
+         "A playable demo: be a rider, get rerouted, earn illustrative rewards "
+         "(simulation, synthetic data)."),
+        ("Cross-Grid Comparison",
+         "Does it generalize? The same optimizer on five real European grids "
+         "(ENTSO-E data), with Germany as the validated anchor."),
+    ]
+
+    for row_start in range(0, len(overview_cards), 2):
+        cols = st.columns(2)
+        for col, (name, description) in zip(
+            cols, overview_cards[row_start:row_start + 2]
+        ):
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"**{name}**")
+                    st.write(description)
+
+    st.subheader("What is real vs illustrative")
+    st.write(
+        "Real, computed results: Depot Optimizer, Deployability Gap, "
+        "Robustness, Cross-Grid Comparison. Illustrative scenarios and "
+        "clearly-labelled simulations: Scenario Explorer, Unified Model, "
+        "Network Prototype, Berlin Pulse Rider."
+    )
+
+    st.subheader("Start here")
+    st.write(
+        "Short on time? Open the Depot Optimizer for the core result. Want the "
+        "big picture? Open Cross-Grid Comparison. Want to play? Open Berlin "
+        "Pulse Rider."
+    )
+
+    st.caption(
+        "Paper: SSRN 6974299. Grid data: SMARD (Germany 2025) and ENTSO-E "
+        "Transparency Platform. Street data: OpenStreetMap (ODbL). Transit "
+        "data: VBB (CC BY)."
+    )
 
 with tab1:
     st.title("Berlin Pulse Depot Charging Optimizer")

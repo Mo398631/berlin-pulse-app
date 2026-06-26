@@ -7,12 +7,16 @@ A Streamlit web app accompanying the research paper:
 
 The app simulates carbon-optimal overnight charging for Berlin's electric bus
 fleet using real SMARD grid data (2025), and exposes the paper's analysis
-through eight interactive tabs.
+through an Overview landing tab plus eight interactive content tabs.
 
 All figures are illustrative simulations with synthetic demand — no operational
 system exists.
 
 ## Tabs
+
+The **Overview** tab is the landing page: a short welcome, a card per content
+tab with its one-line description, a "what is real vs illustrative" note, a
+"start here" guide, and data credits.
 
 1. **Depot Optimizer** — Compares naive chronological charging (Strategy A)
    against carbon-optimal merit-order charging (Strategy B), in both an *oracle*
