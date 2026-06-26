@@ -20,11 +20,25 @@ st.warning(
     "   or computed from public SMARD data, as described in the paper."
 )
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-    "Depot Optimizer", "Scenario Explorer", "Deployability Gap",
+# ---- Global sidebar identity (shown on every tab) ----------------------------
+with st.sidebar:
+    st.subheader("Berlin Pulse")
+    st.caption(
+        "A transparent calculator for carbon-aware depot charging and "
+        "demand-response models of Berlin transit."
+    )
+    st.markdown("[Read the paper (SSRN)](https://ssrn.com/abstract=6974299)")
+    st.caption("Data: SMARD; ENTSO-E.")
+
+overview_tab, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    "Overview", "Depot Optimizer", "Scenario Explorer", "Deployability Gap",
     "Robustness (Monte Carlo)", "Unified Model", "Network Prototype",
     "Berlin Pulse Rider", "Cross-Grid Comparison",
 ])
+
+with overview_tab:
+    st.title("Overview")
+    st.write("Overview content coming soon.")
 
 with tab1:
     st.title("Berlin Pulse Depot Charging Optimizer")
@@ -56,7 +70,8 @@ hour-ranking learned from historical averages — what a real operator could
 implement today with only day-ahead information).
 
 Adjust the fleet size, battery capacity, charger power, and charging window in
-the sidebar, then press **Run** to see the headline savings, intensity profiles,
+the **Simulation inputs** panel above, then press **Run** to see the headline
+savings, intensity profiles,
 an example night's schedule, cumulative CO2 saved over the year, and a
 sensitivity tornado chart.
 
@@ -90,19 +105,24 @@ transit data © VBB Verkehrsverbund Berlin-Brandenburg GmbH (CC BY).
         "19:00 – 06:00 (11 h)": (19, 6),
     }
 
-    with st.sidebar:
-        st.header("Simulation inputs")
-        n_buses = st.number_input("Fleet size (buses)", min_value=1, value=277, step=1)
-        kwh_per_bus = st.number_input(
-            "Energy per bus per night (kWh)", min_value=1.0, value=240.0, step=10.0,
-            help="Total energy each bus needs to charge overnight.",
-        )
-        charger_kw = st.number_input(
-            "Charger power (kW)", min_value=1.0, value=50.0, step=5.0,
-            help="Rated power of each charger. Determines how many hours are needed per bus.",
-        )
-        window_label = st.selectbox("Charging window", list(WINDOW_PRESETS.keys()))
-        run_btn = st.button("Run", type="primary", use_container_width=True)
+    with st.container(border=True):
+        st.subheader("Simulation inputs")
+        in_col1, in_col2, in_col3, in_col4 = st.columns(4)
+        with in_col1:
+            n_buses = st.number_input("Fleet size (buses)", min_value=1, value=277, step=1)
+        with in_col2:
+            kwh_per_bus = st.number_input(
+                "Energy per bus per night (kWh)", min_value=1.0, value=240.0, step=10.0,
+                help="Total energy each bus needs to charge overnight.",
+            )
+        with in_col3:
+            charger_kw = st.number_input(
+                "Charger power (kW)", min_value=1.0, value=50.0, step=5.0,
+                help="Rated power of each charger. Determines how many hours are needed per bus.",
+            )
+        with in_col4:
+            window_label = st.selectbox("Charging window", list(WINDOW_PRESETS.keys()))
+        run_btn = st.button("Run", type="primary")
 
     # ---- Input validation --------------------------------------------------------
 
