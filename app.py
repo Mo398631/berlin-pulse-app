@@ -634,6 +634,37 @@ off-peak incentive scheme (≈ **8.5 %**).
         "reference for the peak-shift input."
     )
 
+    with st.expander(
+        "Appendix C: Evidence envelope for the congestion-channel "
+        "peak-shift parameter",
+        expanded=False,
+    ):
+        st.markdown(
+            """
+The peak-shift parameter (**rho**) in the scenario ladder is bounded against
+external evidence from a **three-tier literature screen**. Each scenario on the
+ladder is checked against that documented range rather than chosen freely.
+
+- The **conservative** scenario (5% peak shift) sits at the **lower end** of the
+  evidence envelope.
+- The **medium** scenario (15%) is **within** the documented range.
+- The **high** scenario (30%) **approaches the upper bound** and requires the
+  most favorable conditions.
+
+The **Deutschlandticket** path is **excluded** from the envelope because it
+operates through fare reduction rather than dynamic incentives, making it a
+different mechanism.
+
+| Scenario | Peak-shift parameter | Position in evidence envelope |
+| --- | --- | --- |
+| Low | 5% | Lower bound |
+| Medium | 15% | Within range |
+| High | 30% | Upper bound |
+
+Full methodology in Appendix C of the manuscript.
+            """
+        )
+
 with tab3:
     st.title("Deployability Gap")
     st.caption(
@@ -894,6 +925,34 @@ per-clock-hour mean intensity over the training window) are recorded.
         "neighbour-zone import/export data that is not bundled with this app, and "
         "is left as future work."
     )
+
+    with st.expander(
+        "Appendix D Pillar Two: Consumption-based intensity robustness",
+        expanded=False,
+    ):
+        st.markdown(
+            """
+**Pillar One** (the Monte Carlo shown above) tests parametric uncertainty in
+the **emission factors**.
+
+**Pillar Two** tests whether switching from **production-based** to
+**consumption-based** carbon intensity changes the conclusion. It does **not**:
+the *level* shifts (consumption intensity is higher) but the *shape* of the
+overnight profile does not change, so the **carbon saving percentage is
+preserved**.
+
+The **cost channel is invariant** to this switch **by construction** — it uses
+prices, not emission factors.
+
+Two caveats:
+
+- The consumption series incorporates **imports and lifecycle emissions**, so
+  absolute intensity figures are higher.
+- The **cross-border flow data carries its own uncertainty**.
+
+Full methodology in Appendix D of the manuscript.
+            """
+        )
 
 with tab5:
     from unified_model import (
