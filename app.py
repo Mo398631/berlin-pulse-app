@@ -11,6 +11,7 @@ from scenario_engine import (
     INSINC_PEAK_SHIFT_PCT as INSINC_ANCHOR,
     JR_EAST_PEAK_SHIFT_PCT as JR_EAST_ANCHOR,
 )
+import forecast_engine
 
 st.set_page_config(page_title="Berlin Pulse Depot Charging Optimizer", layout="wide")
 
@@ -30,10 +31,10 @@ with st.sidebar:
     st.markdown("[Read the paper (SSRN)](https://ssrn.com/abstract=6974299)")
     st.caption("Data: SMARD; ENTSO-E.")
 
-overview_tab, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+overview_tab, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "Overview", "Depot Optimizer", "Scenario Explorer", "Deployability Gap",
     "Robustness (Monte Carlo)", "Unified Model", "Network Prototype",
-    "Berlin Pulse Rider", "Cross-Grid Comparison",
+    "Berlin Pulse Rider", "Cross-Grid Comparison", "Forecast Recovery",
 ])
 
 with overview_tab:
@@ -2517,4 +2518,170 @@ with tab8:
         "Generation and price data: ENTSO-E Transparency Platform (2025). "
         "Germany: validated SMARD 2025 dataset (paper anchor, 2.3884% carbon / "
         "4.8482% cost saving)."
+    )
+
+
+# ============================================================================
+# TAB 9 — Forecast Recovery (Appendix E)
+# ============================================================================
+with tab9:
+
+    @st.cache_data(show_spinner="Computing forecast recovery (Appendix E)…")
+    def _forecast_recovery():
+        """Compute the Appendix E forecast-recovery result once and cache it.
+
+        Reproduce-before-perturb lives inside forecast_engine: the five Appendix
+        B bookends are reproduced and asserted before any forecast is built.
+        """
+        return forecast_engine.compute_forecast_recovery()
+
+    fr = _forecast_recovery()
+    bk = fr["bookends"]
+    op = fr["operational"]
+    nv = fr["naive"]
+
+    # Pull the headline figures (recovery values are fractions -> percent).
+    q4_oracle_pct = bk["carbon_oracle_q4_pct"]            # 3.76% — the carbon prize
+    deployable_cost_pct = bk["deployable_cost_fy_pct"]    # 8.76% — the cost prize
+    share_q4_recovery_pct = op["share"]["q4_recovery"] * 100.0   # 90.5%
+    share_q4_saving_pct = op["share"]["q4_saving_pct"]           # 3.40%
+
+    FR_ACCENT = "rgb(99,110,250)"          # app accent — operational forecasts
+    FR_GREY = "rgba(150,150,150,0.75)"     # naive forecasts
+    FR_NEUTRAL = "rgba(110,110,110,0.45)"  # bookends (blind / oracle)
+    FR_NULL = "rgba(239,85,59,0.55)"       # random-order null
+
+    # ---- Title + plain-English framing (Appendix E.5 order) --------------------
+    st.title("Forecast Recovery")
+    st.markdown(
+        "**The big prize needs no forecast.** The deployable day-ahead-price "
+        f"rule already captures a **{deployable_cost_pct:.2f}% cost saving** with "
+        "zero foresight — it ranks overnight hours by published next-day prices, "
+        "so nothing here has to be predicted. The **carbon** channel is the one "
+        "where forecasting could help, and it is real but much smaller: with "
+        f"perfect hindsight the most carbon a smarter night schedule can avoid is "
+        f"only **{q4_oracle_pct:.2f}%** (Q4, out of sample). Against that small "
+        f"prize, the operational *share* predictor recovers "
+        f"**{share_q4_recovery_pct:.1f}%** of the oracle — which, because the "
+        f"prize is small, is a realized carbon saving of just "
+        f"**{share_q4_saving_pct:.2f}%**. This tab resolves the Appendix B "
+        "question of whether the carbon gap can be closed with a real forecast: "
+        "mostly yes in *relative* terms, but the absolute carbon prize stays "
+        "small, while the cost prize — which needs no forecast at all — remains "
+        "the larger result."
+    )
+
+    # ---- STEP 1: recovery ladder ----------------------------------------------
+    st.subheader("Recovery ladder — how much of the carbon oracle each method recovers (Q4)")
+
+    ladder = [
+        ("Deployable blind",       bk["blind_recovery"] * 100.0,                FR_NEUTRAL),
+        ("Persistence",            nv["persistence"]["q4_recovery"] * 100.0,    FR_GREY),
+        ("Climatology",            nv["climatology"]["q4_recovery"] * 100.0,    FR_GREY),
+        ("Random null",            fr["random_null"]["q4_recovery"] * 100.0,    FR_NULL),
+        ("Share predictor",        op["share"]["q4_recovery"] * 100.0,          FR_ACCENT),
+        ("Direct predictor",       op["direct"]["q4_recovery"] * 100.0,         FR_ACCENT),
+        ("Merit-order predictor",  op["merit_order"]["q4_recovery"] * 100.0,    FR_ACCENT),
+        ("Oracle",                 bk["oracle_recovery"] * 100.0,               FR_NEUTRAL),
+    ]
+    ladder_x = [name for name, _, _ in ladder]
+    ladder_y = [val for _, val, _ in ladder]
+    ladder_c = [col for _, _, col in ladder]
+    null_pct = fr["random_null"]["q4_recovery"] * 100.0
+
+    fig_ladder = go.Figure()
+    # Shaded band for the random-order null floor (chance recovery).
+    fig_ladder.add_hrect(
+        y0=min(0.0, null_pct), y1=max(0.0, null_pct),
+        fillcolor="rgba(239,85,59,0.10)", line_width=0, layer="below",
+        annotation_text="random-order null floor", annotation_position="top left",
+        annotation_font_size=11, annotation_font_color="rgba(239,85,59,0.9)",
+    )
+    fig_ladder.add_trace(go.Bar(
+        x=ladder_x, y=ladder_y, marker_color=ladder_c,
+        text=[f"{v:.1f}%" for v in ladder_y], textposition="outside",
+        hovertemplate="%{x}<br>Q4 recovery: %{y:.1f}%<extra></extra>",
+    ))
+    fig_ladder.update_layout(
+        xaxis_title="Forecast method",
+        yaxis=dict(title="Q4 recovery of carbon oracle (%)",
+                   range=[min(0.0, null_pct) - 8, max(ladder_y) * 1.18]),
+        margin=dict(t=30, b=80),
+        height=460,
+        showlegend=False,
+    )
+    st.plotly_chart(fig_ladder, use_container_width=True)
+    st.caption(
+        "Grey = naive forecasts · accent = operational forecasts · neutral = "
+        "blind/oracle bookends · the red bar and shaded band mark the random-"
+        "order null floor (what a coin-flip schedule recovers by chance)."
+    )
+
+    # ---- STEP 2: headline metrics ---------------------------------------------
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Q4 carbon oracle (the prize)", f"{q4_oracle_pct:.2f} %",
+              help="Most carbon a perfect-foresight night schedule can avoid, "
+                   "Q4 out of sample. This is the ceiling forecasts chase.")
+    m2.metric("Share predictor — Q4 recovery", f"{share_q4_recovery_pct:.1f} %",
+              help="Share of the carbon oracle recovered by the operational "
+                   "renewable-share predictor (relative).")
+    m3.metric("Share predictor — realized saving", f"{share_q4_saving_pct:.2f} %",
+              help="The recovery applied to the small prize: actual Q4 carbon "
+                   "saving vs naive Strategy A.")
+    m4.metric("Deployable cost saving", f"{deployable_cost_pct:.2f} %",
+              help="Full-year cost saving from the deployable day-ahead-price "
+                   "rule — needs no forecast at all (the larger prize).")
+
+    # ---- STEP 3: full method table --------------------------------------------
+    st.subheader("All forecast methods")
+    rows = []
+    method_labels = [
+        ("persistence", "Persistence (naive)", nv),
+        ("climatology", "Climatology (naive)", nv),
+        ("share", "Share predictor (operational)", op),
+        ("direct", "Direct predictor (operational)", op),
+        ("merit_order", "Merit-order predictor (operational)", op),
+    ]
+    for key, label, src in method_labels:
+        m = src[key]
+        rows.append({
+            "Forecast method": label,
+            "Q4 recovery": f"{m['q4_recovery'] * 100.0:.1f}%",
+            "Full-year recovery": f"{m['fy_recovery'] * 100.0:.1f}%",
+            "Within-night rank corr (Q4)": f"{m['rank_corr']:.3f}",
+        })
+    st.table(pd.DataFrame(rows).set_index("Forecast method"))
+    st.caption(
+        "Recovery = realized carbon saving under the forecast schedule ÷ saving "
+        "under the perfect-foresight oracle, on the same night set. Rank "
+        "correlation is the within-night Spearman of forecast vs realized "
+        "intensity, averaged over Q4 nights."
+    )
+
+    # ---- STEP 4: scope notes ---------------------------------------------------
+    with st.expander("What this means"):
+        st.markdown(
+            f"- **The big prize is cost, and it needs no forecast.** The "
+            f"deployable day-ahead-price rule already books a "
+            f"{deployable_cost_pct:.2f}% cost saving using only published "
+            f"next-day prices — no prediction of the future is required. "
+            f"Forecasting changes nothing about this larger result.\n\n"
+            f"- **The carbon prize is real but small, and it is what foresight "
+            f"buys.** Even perfect hindsight avoids only {q4_oracle_pct:.2f}% "
+            f"more carbon (Q4). So the {share_q4_recovery_pct:.1f}% the share "
+            f"predictor recovers is an impressive slice of a small pie — a "
+            f"realized carbon saving of {share_q4_saving_pct:.2f}%. A large "
+            f"recovery percentage is not a large amount of carbon.\n\n"
+            f"- **What is being measured is within-night ranking, out of "
+            f"sample.** The metric scores how well a forecast orders the hours "
+            f"*inside each Q4 night* against realized intensity — never how it "
+            f"chooses which nights to charge. Naive forecasts barely clear the "
+            f"random-order null floor; the operational forecasts recover most "
+            f"of the (small) carbon prize, which is the honest answer to the "
+            f"Appendix B gap."
+        )
+
+    # ---- STEP 5: pointer ------------------------------------------------------
+    st.markdown(
+        "← See **Deployability Gap** tab for the Appendix B result this resolves."
     )
