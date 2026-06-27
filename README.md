@@ -44,6 +44,10 @@ tab with its one-line description, a "what is real vs illustrative" note, a
 8. **Cross-Grid Comparison** — Runs the same validated optimizer across five
    real European grids (ENTSO-E 2025 data) with Germany as the locked anchor,
    showing where the Berlin result holds and where it breaks.
+9. **Forecast Recovery** — Appendix E forecast-based recovery of the carbon
+   ceiling: a day-ahead renewables forecast recovers ~90% of the Q4 carbon
+   ceiling while naive forecasts recover nothing, with the cost channel
+   invariant at 8.76%.
 
 ## Quick start
 
@@ -66,6 +70,7 @@ The test suite covers the simulation engines behind each tab:
 - `test_prototype.py` — Network Prototype redirection + reconciliation
 - `test_rider.py` — Berlin Pulse Rider engine + reward logic + reconciliation
 - `test_crossgrid.py` — Cross-Grid Comparison engine + Germany anchor
+- `test_forecast.py` — 12 tests covering Appendix E forecast recovery engine
 
 Run them all with:
 

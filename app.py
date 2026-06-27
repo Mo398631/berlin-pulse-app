@@ -72,6 +72,10 @@ with overview_tab:
         ("Cross-Grid Comparison",
          "Does it generalize? The same optimizer on five real European grids "
          "(ENTSO-E data), with Germany as the validated anchor."),
+        ("Forecast Recovery",
+         "Appendix E: day-ahead renewables forecast recovers ~90% of the Q4 "
+         "carbon ceiling. Naive forecasts recover nothing. Cost channel "
+         "invariant at 8.76%."),
     ]
 
     for row_start in range(0, len(overview_cards), 2):
@@ -87,7 +91,8 @@ with overview_tab:
     st.subheader("What is real vs illustrative")
     st.write(
         "Real, computed results: Depot Optimizer, Deployability Gap, "
-        "Robustness, Cross-Grid Comparison. Illustrative scenarios and "
+        "Robustness, Cross-Grid Comparison, Forecast Recovery. Illustrative "
+        "scenarios and "
         "clearly-labelled simulations: Scenario Explorer, Unified Model, "
         "Network Prototype, Berlin Pulse Rider."
     )
