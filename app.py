@@ -253,6 +253,12 @@ transit data © VBB Verkehrsverbund Berlin-Brandenburg GmbH (CC BY).
         col5.metric("CO₂ saved per bus / year", f"{res['per_bus']['co2_saved_kg']:.1f} kg")
         col6.metric("Cost saved per bus / year", f"€ {res['per_bus']['cost_saved_eur']:.2f}")
 
+        st.metric("Deployable cost saving (no forecast needed)", "8.76 %")
+        st.caption(
+            "Robust, out-of-sample result from Appendix B: a price-ranked rule frozen on "
+            "historical averages captures this saving with no day-ahead forecast required."
+        )
+
         mode_note = "oracle / perfect foresight" if is_oracle else "deployable / frozen day-ahead ranking"
         st.caption(f"Based on {res['n_nights']} complete nights, window {window_label}, mode: {mode_note}.")
 
@@ -439,6 +445,8 @@ transit data © VBB Verkehrsverbund Berlin-Brandenburg GmbH (CC BY).
                 height=300,
             )
             st.plotly_chart(fig_t, use_container_width=True)
+
+    st.info("For the carbon co-benefit and forecast recovery, see the Forecast Recovery tab →")
 
 with tab2:
     st.title("Scenario Explorer")
